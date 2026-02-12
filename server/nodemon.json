@@ -1,0 +1,14 @@
+{
+    "watch": [
+        "src"
+    ],
+    "ext": "ts",
+    "ignore": [
+        "src/**/*.spec.ts"
+    ],
+    "exec": "ts-node",
+    "execMap": {
+        "ts": "node --loader ts-node/esm"
+    },
+    "delay": 500
+}
