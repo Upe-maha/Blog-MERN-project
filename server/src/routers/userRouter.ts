@@ -1,13 +1,32 @@
-import { Router } from "express";
-import { deleteUser, getUserById, getUsers, registerUser, updateUser } from "../controllers/user.controllers";
+import express from "express";
+import {
+    registerUser,
+    loginUser,
+    getAllUsers,
+    getUserById,
+    updateUser,
+    deleteUser,
+} from "../controllers/user.controller";
+import { uploadProfilePicture } from "../config/multer";
 
-const router = Router();
+const userRouter = express.Router();
 
-router.post("/register", registerUser);
-router.get("/", getUsers);
-router.get("/:id", getUserById);
-router.put("/:id", updateUser);
-router.delete("/:id", deleteUser);
+// POST register user (with profile picture upload)
+userRouter.post("/", uploadProfilePicture, registerUser);
 
+// POST login user
+userRouter.post("/login", loginUser);
 
-export default router;
+// GET all users
+userRouter.get("/", getAllUsers);
+
+// GET user by ID
+userRouter.get("/:id", getUserById);
+
+// PUT update user (with profile picture upload)
+userRouter.put("/:id", uploadProfilePicture, updateUser);
+
+// DELETE user
+userRouter.delete("/:id", deleteUser);
+
+export default userRouter;
