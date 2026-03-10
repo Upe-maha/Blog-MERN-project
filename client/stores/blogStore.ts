@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { Blog } from "@/types";
-import { blogAPI } from "@/lib/api";
+import { blogService } from "@/services/blogService";
 
 interface BlogState {
     blogs: Blog[];
@@ -18,7 +18,7 @@ interface BlogState {
     clearError: () => void;
 }
 
-export const useBlogStore = create<BlogState>((set, get) => ({
+export const useBlogStore = create<BlogState>((set) => ({
     blogs: [],
     currentBlog: null,
     isLoading: false,
@@ -27,9 +27,9 @@ export const useBlogStore = create<BlogState>((set, get) => ({
     fetchBlogs: async () => {
         set({ isLoading: true, error: null });
         try {
-            const response = await blogAPI.getAll();
+            const response = await blogService.getAll();
             set({ blogs: response.blogs || [], isLoading: false });
-        } catch (error) {
+        } catch {
             set({ error: "Failed to fetch blogs", isLoading: false });
         }
     },
@@ -37,9 +37,9 @@ export const useBlogStore = create<BlogState>((set, get) => ({
     fetchBlogById: async (id) => {
         set({ isLoading: true, error: null });
         try {
-            const response = await blogAPI.getById(id);
+            const response = await blogService.getById(id);
             set({ currentBlog: response.blog, isLoading: false });
-        } catch (error) {
+        } catch {
             set({ error: "Failed to fetch blog", isLoading: false });
         }
     },
@@ -47,7 +47,7 @@ export const useBlogStore = create<BlogState>((set, get) => ({
     createBlog: async (formData) => {
         set({ isLoading: true, error: null });
         try {
-            const response = await blogAPI.create(formData);
+            const response = await blogService.create(formData);
             if (response.blog) {
                 set((state) => ({
                     blogs: [response.blog, ...state.blogs],
@@ -57,7 +57,7 @@ export const useBlogStore = create<BlogState>((set, get) => ({
             }
             set({ error: response.message, isLoading: false });
             return null;
-        } catch (error) {
+        } catch {
             set({ error: "Failed to create blog", isLoading: false });
             return null;
         }
@@ -66,7 +66,7 @@ export const useBlogStore = create<BlogState>((set, get) => ({
     updateBlog: async (id, formData) => {
         set({ isLoading: true, error: null });
         try {
-            const response = await blogAPI.update(id, formData);
+            const response = await blogService.update(id, formData);
             if (response.blog) {
                 set((state) => ({
                     blogs: state.blogs.map((blog) =>
@@ -76,7 +76,7 @@ export const useBlogStore = create<BlogState>((set, get) => ({
                     isLoading: false,
                 }));
             }
-        } catch (error) {
+        } catch {
             set({ error: "Failed to update blog", isLoading: false });
         }
     },
@@ -84,12 +84,12 @@ export const useBlogStore = create<BlogState>((set, get) => ({
     deleteBlog: async (id) => {
         set({ isLoading: true, error: null });
         try {
-            await blogAPI.delete(id);
+            await blogService.delete(id);
             set((state) => ({
                 blogs: state.blogs.filter((blog) => blog._id !== id),
                 isLoading: false,
             }));
-        } catch (error) {
+        } catch {
             set({ error: "Failed to delete blog", isLoading: false });
         }
     },

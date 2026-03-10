@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { likeAPI } from "@/lib/api";
+import { likeService } from "@/services/blogService";
 
 interface LikeState {
     likesCount: number;
@@ -23,7 +23,7 @@ export const useLikeStore = create<LikeState>((set) => ({
 
     checkUserLike: async (blogId, userId) => {
         try {
-            const response = await likeAPI.checkUserLike(blogId, userId);
+            const response = await likeService.checkUserLike(blogId, userId);
             set({ isLiked: response.liked });
         } catch (error) {
             console.error("Check like error:", error);
@@ -33,13 +33,13 @@ export const useLikeStore = create<LikeState>((set) => ({
     likeBlog: async (blogId, userId) => {
         set({ isLoading: true, error: null });
         try {
-            await likeAPI.like({ blogId, userId });
+            await likeService.like({ blogId, userId });
             set((state) => ({
                 isLiked: true,
                 likesCount: state.likesCount + 1,
                 isLoading: false,
             }));
-        } catch (error) {
+        } catch {
             set({ error: "Failed to like blog", isLoading: false });
         }
     },
@@ -47,13 +47,13 @@ export const useLikeStore = create<LikeState>((set) => ({
     unlikeBlog: async (blogId, userId) => {
         set({ isLoading: true, error: null });
         try {
-            await likeAPI.unlike({ blogId, userId });
+            await likeService.unlike({ blogId, userId });
             set((state) => ({
                 isLiked: false,
                 likesCount: state.likesCount - 1,
                 isLoading: false,
             }));
-        } catch (error) {
+        } catch {
             set({ error: "Failed to unlike blog", isLoading: false });
         }
     },

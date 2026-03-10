@@ -2,8 +2,8 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useAuthStore } from "@/lib/store";
-import Loading from "./Loading";
+import { useAuthStore } from "@/stores";
+import Loading from "@/components/ui/Loading";
 
 interface AuthGuardProps {
     children: React.ReactNode;

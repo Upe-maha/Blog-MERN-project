@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { useAuthStore } from "@/lib/store";
-import { blogAPI } from "@/lib/api";
+import { useAuthStore } from "@/stores";
+import { blogService } from "@/services/blogService";
 import Link from "next/link";
 
 export default function CreateBlogPage() {
@@ -79,7 +79,7 @@ export default function CreateBlogPage() {
                 submitData.append("blogImage", blogImage);
             }
 
-            const response = await blogAPI.create(submitData);
+            const response = await blogService.create(submitData);
 
             if (response.blog) {
                 router.push(`/blogs/${response.blog._id}`);

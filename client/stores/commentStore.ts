@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { Comment } from "@/types";
-import { commentAPI } from "@/lib/api";
+import { commentService } from "@/services/commentService";
 
 interface CommentState {
     comments: Comment[];
@@ -23,9 +23,9 @@ export const useCommentStore = create<CommentState>((set) => ({
     fetchCommentsByBlog: async (blogId) => {
         set({ isLoading: true, error: null });
         try {
-            const response = await commentAPI.getByBlog(blogId);
+            const response = await commentService.getByBlog(blogId);
             set({ comments: response.comments || [], isLoading: false });
-        } catch (error) {
+        } catch {
             set({ error: "Failed to fetch comments", isLoading: false });
         }
     },
@@ -33,14 +33,14 @@ export const useCommentStore = create<CommentState>((set) => ({
     addComment: async (data) => {
         set({ isLoading: true, error: null });
         try {
-            const response = await commentAPI.add(data);
+            const response = await commentService.add(data);
             if (response.comment) {
                 set((state) => ({
                     comments: [response.comment, ...state.comments],
                     isLoading: false,
                 }));
             }
-        } catch (error) {
+        } catch {
             set({ error: "Failed to add comment", isLoading: false });
         }
     },
@@ -48,12 +48,12 @@ export const useCommentStore = create<CommentState>((set) => ({
     deleteComment: async (id) => {
         set({ isLoading: true, error: null });
         try {
-            await commentAPI.delete(id);
+            await commentService.delete(id);
             set((state) => ({
                 comments: state.comments.filter((comment) => comment._id !== id),
                 isLoading: false,
             }));
-        } catch (error) {
+        } catch {
             set({ error: "Failed to delete comment", isLoading: false });
         }
     },

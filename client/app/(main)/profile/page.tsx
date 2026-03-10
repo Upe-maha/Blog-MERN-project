@@ -1,11 +1,13 @@
 "use client";
 
-import { useAuthStore, useBlogStore } from "@/lib/store";
+import { useAuthStore } from "@/stores";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Blog } from "@/types";
-import { blogAPI } from "@/lib/api";
+import { blogService } from "@/services/blogService";
+import { getImageUrl } from "@/lib/api";
 import Link from "next/link";
+import BlogCard from "@/components/blog/BlogCard";
 
 export default function ProfilePage() {
     const router = useRouter();
@@ -23,7 +25,7 @@ export default function ProfilePage() {
 
     const fetchUserBlogs = async () => {
         try {
-            const response = await blogAPI.getAll();
+            const response = await blogService.getAll();
             const blogs = response.blogs || [];
             // Filter blogs by current user
             const filtered = blogs.filter(
@@ -41,7 +43,7 @@ export default function ProfilePage() {
         if (!confirm("Are you sure you want to delete this blog?")) return;
 
         try {
-            await blogAPI.delete(blogId);
+            await blogService.delete(blogId);
             setUserBlogs((prev) => prev.filter((blog) => blog._id !== blogId));
         } catch (error) {
             console.error("Error deleting blog:", error);
@@ -67,11 +69,19 @@ export default function ProfilePage() {
     return (
         <div className="max-w-6xl mx-auto px-4 py-10">
             {/* Profile Header */}
-            <div className="bg-white rounded-2xl shadow-lg p-8 mb-8">
+            <div className="bg-white/50 rounded-2xl shadow-lg p-8 mb-8">
                 <div className="flex flex-col md:flex-row items-center md:items-start gap-6">
                     {/* Avatar */}
-                    <div className="w-24 h-24 bg-indigo-500 rounded-full flex items-center justify-center text-white text-4xl font-bold">
-                        {user.username?.charAt(0).toUpperCase()}
+                    <div className="w-24 h-24 bg-indigo-500 rounded-full flex items-center justify-center text-white text-4xl font-bold overflow-hidden">
+                        {getImageUrl(user.profilePicture) ? (
+                            <img
+                                src={getImageUrl(user.profilePicture)}
+                                alt={user.username}
+                                className="w-full h-full object-cover"
+                            />
+                        ) : (
+                            user.username?.charAt(0).toUpperCase()
+                        )}
                     </div>
 
                     {/* User Info */}
@@ -113,7 +123,7 @@ export default function ProfilePage() {
             </div>
 
             {/* User's Blogs */}
-            <div className="bg-white rounded-2xl shadow-lg p-8">
+            <div className="bg-white/50 rounded-2xl shadow-lg p-8">
                 <h2 className="text-2xl font-bold text-gray-900 mb-6">My Blogs</h2>
 
                 {isLoading ? (
@@ -133,44 +143,16 @@ export default function ProfilePage() {
                         </Link>
                     </div>
                 ) : (
-                    <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {userBlogs.map((blog) => (
-                            <div
-                                key={blog._id}
-                                className="border rounded-xl p-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:shadow-md transition"
-                            >
-                                <div className="flex-1">
-                                    <Link
-                                        href={`/blogs/${blog._id}`}
-                                        className="text-xl font-semibold text-gray-800 hover:text-indigo-600"
-                                    >
-                                        {blog.title}
-                                    </Link>
-                                    <p className="text-gray-500 text-sm mt-1 line-clamp-1">
-                                        {blog.description}
-                                    </p>
-                                    <div className="flex gap-4 mt-2 text-sm text-gray-400">
-                                        <span>❤️ {blog.likesCount}</span>
-                                        <span>💬 {blog.commentsCount}</span>
-                                        <span>
-                                            {new Date(blog.createdAt).toLocaleDateString()}
-                                        </span>
-                                    </div>
-                                </div>
-                                <div className="flex gap-2">
-                                    <Link
-                                        href={`/blogs/${blog._id}`}
-                                        className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition text-sm"
-                                    >
-                                        View
-                                    </Link>
-                                    <button
-                                        onClick={() => handleDeleteBlog(blog._id)}
-                                        className="bg-red-100 text-red-600 px-4 py-2 rounded-lg hover:bg-red-200 transition text-sm"
-                                    >
-                                        Delete
-                                    </button>
-                                </div>
+                            <div key={blog._id} className="relative group">
+                                <BlogCard blog={blog} />
+                                <button
+                                    onClick={() => handleDeleteBlog(blog._id)}
+                                    className="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-lg text-xs font-semibold opacity-0 group-hover:opacity-100 transition"
+                                >
+                                    Delete
+                                </button>
                             </div>
                         ))}
                     </div>

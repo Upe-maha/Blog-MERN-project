@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useAuthStore } from "@/lib/store";
+import { useAuthStore } from "@/stores";
 import UserMenu from "./UserMenu";
 
 const NavLinks = () => {

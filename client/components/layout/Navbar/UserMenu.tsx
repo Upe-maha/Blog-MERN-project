@@ -1,8 +1,9 @@
 "use client";
 
-import { useAuthStore } from "@/lib/store";
+import { useAuthStore } from "@/stores";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { getImageUrl } from "@/lib/api";
 
 const UserMenu = () => {
     const { user, logout } = useAuthStore();
@@ -13,14 +14,16 @@ const UserMenu = () => {
         router.push("/blogs");
     };
 
+    const profileImageUrl = getImageUrl(user?.profilePicture);
+
     return (
         <div className="flex items-center gap-3">
             {/* Avatar → Profile */}
             <Link href="/profile">
                 <div className="w-8 h-8 bg-indigo-500 rounded-full flex items-center justify-center text-white text-sm overflow-hidden cursor-pointer">
-                    {user?.profilePicture ? (
+                    {profileImageUrl ? (
                         <img
-                            src={user.profilePicture}
+                            src={profileImageUrl}
                             alt="profile"
                             className="w-full h-full object-cover"
                         />

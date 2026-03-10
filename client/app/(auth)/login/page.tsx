@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useAuthStore } from "@/lib/store";
-import { userAPI } from "@/lib/api";
+import { useAuthStore } from "@/stores";
+import { authService } from "@/services/authService";
 
 export default function LoginPage() {
     const router = useRouter();
@@ -24,8 +24,7 @@ export default function LoginPage() {
         setIsLoading(true);
 
         try {
-            // TODO: Replace with actual login API
-            const response = await userAPI.login(formData);
+            const response = await authService.login(formData);
 
             if (response.user && response.token) {
                 setUser(response.user, response.token);

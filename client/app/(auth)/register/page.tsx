@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { userAPI } from "@/lib/api";
-import { useAuthStore } from "@/lib/store";
+import { authService } from "@/services/authService";
+import { useAuthStore } from "@/stores";
 
 export default function RegisterPage() {
     const router = useRouter();
@@ -73,11 +73,11 @@ export default function RegisterPage() {
                 submitData.append("profilePicture", profileImage);
             }
 
-            const response = await userAPI.register(submitData);
+            const response = await authService.register(submitData);
 
             if (response.user) {
                 // Auto login after registration
-                const loginResponse = await userAPI.login({
+                const loginResponse = await authService.login({
                     email: formData.email,
                     password: formData.password,
                 });
