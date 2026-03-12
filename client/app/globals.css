@@ -24,10 +24,10 @@
 /* Global styles */
 body {
   background: linear-gradient(
-      rgba(255,255,255,0.25),
-      rgba(255,255,255,0.25)
+      rgba(255, 255, 255, 0.5),
+      rgba(222, 220, 220, 0.25)
     ),
-    url("/images/bg3.jpg");
+    url("/images/bg1.jpg");
 
   background-size: cover;
   background-position: center;

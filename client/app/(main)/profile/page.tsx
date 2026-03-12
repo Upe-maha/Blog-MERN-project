@@ -11,17 +11,18 @@ import BlogCard from "@/components/blog/BlogCard";
 
 export default function ProfilePage() {
     const router = useRouter();
-    const { user, isAuthenticated, logout } = useAuthStore();
+    const { user, isAuthenticated, isHydrated, logout } = useAuthStore();
     const [userBlogs, setUserBlogs] = useState<Blog[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
+        if (!isHydrated) return; // wait for localStorage to rehydrate
         if (!isAuthenticated) {
             router.push("/login");
             return;
         }
         fetchUserBlogs();
-    }, [isAuthenticated, router]);
+    }, [isAuthenticated, isHydrated, router]);
 
     const fetchUserBlogs = async () => {
         try {
@@ -55,7 +56,7 @@ export default function ProfilePage() {
         router.push("/");
     };
 
-    if (!isAuthenticated || !user) {
+    if (!isHydrated || !isAuthenticated || !user) {
         return (
             <div className="min-h-[60vh] flex items-center justify-center">
                 <div className="text-center">
@@ -105,12 +106,18 @@ export default function ProfilePage() {
                     </div>
 
                     {/* Actions */}
-                    <div className="flex gap-3">
+                    <div className="flex flex-wrap gap-3">
                         <Link
                             href="/blogs/create"
                             className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-indigo-700 transition"
                         >
                             + New Blog
+                        </Link>
+                        <Link
+                            href="/profile/edit"
+                            className="border border-indigo-600 text-indigo-600 px-6 py-2 rounded-lg font-semibold hover:bg-indigo-50 transition"
+                        >
+                            Edit Profile
                         </Link>
                         <button
                             onClick={handleLogout}
