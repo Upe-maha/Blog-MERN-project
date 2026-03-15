@@ -3,6 +3,7 @@ import Comment from "../models/comment";
 import Like from "../models/like";
 import fs from "fs";
 import path from "path";
+import { cursorTo } from "readline";
 
 // Helper function to get image URL
 const getImageUrl = (filename: string | undefined): string => {
@@ -62,10 +63,18 @@ export const createBlog = async (req: Request, res: Response) => {
 // Get All Blogs
 export const getAllBlogs = async (req: Request, res: Response) => {
     try {
+        const limit = parseInt(req.query.limit as string) || 5; // 0 means no limit
+        console.log("Limit:", limit);
+        const page = parseInt(req.query.page as string) || 1;
+        console.log("Page:", page);
+        const skip = (page - 1) * limit;
+        console.log("Skip:", skip);
         const blogs = await Blog.find()
             .populate("author", "username email profilePicture")
-            .sort({ createdAt: -1 });
-
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit);
+        const totalBlogs = await Blog.countDocuments();
         // Add comments and likes count
         const blogsWithCounts = await Promise.all(
             blogs.map(async (blog) => {
@@ -79,7 +88,11 @@ export const getAllBlogs = async (req: Request, res: Response) => {
             })
         );
 
-        return res.status(200).json({ blogs: blogsWithCounts });
+        return res.status(200).json({
+            blogs: blogsWithCounts,
+            currentPage: page,
+            totalPages: limit > 0 ? Math.ceil(totalBlogs / limit) : 1,
+        });
     } catch (error) {
         console.log("Error:", error);
         return res.status(500).json({ message: "Internal server error" });

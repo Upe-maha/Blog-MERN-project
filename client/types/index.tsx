@@ -3,6 +3,8 @@ export interface User {
     username: string;
     email: string;
     profilePicture?: string;
+    role: "user" | "admin";
+    isBlocked: boolean;
     createdAt: string;
     updatedAt: string;
 }

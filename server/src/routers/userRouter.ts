@@ -1,5 +1,6 @@
 import express from "express";
 import {
+    checkAdminExists,
     registerUser,
     loginUser,
     getAllUsers,
@@ -10,6 +11,9 @@ import {
 import { uploadProfilePicture } from "../config/multer";
 
 const userRouter = express.Router();
+
+// Public: check admin exists (used by register page)
+userRouter.get("/check-admin", checkAdminExists);
 
 // POST register user (with profile picture upload)
 userRouter.post("/", uploadProfilePicture, registerUser);

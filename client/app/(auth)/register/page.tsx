@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { authService } from "@/services/authService";
 import { useAuthStore } from "@/stores";
@@ -10,6 +10,9 @@ export default function RegisterPage() {
     const router = useRouter();
     const { setUser } = useAuthStore();
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const [adminExists, setAdminExists] = useState<boolean | null>(null);
+    const [registerAsAdmin, setRegisterAsAdmin] = useState(false);
 
     const [formData, setFormData] = useState({
         username: "",
@@ -22,6 +25,13 @@ export default function RegisterPage() {
     const [error, setError] = useState("");
     const [isLoading, setIsLoading] = useState(false);
 
+    // Check if an admin exists — determines whether to show the admin option
+    useEffect(() => {
+        authService.checkAdminExists()
+            .then(({ adminExists }) => setAdminExists(adminExists))
+            .catch(() => setAdminExists(true)); // fail-safe: hide admin option on error
+    }, []);
+
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
         setFormData((prev) => ({ ...prev, [name]: value }));
@@ -32,9 +42,7 @@ export default function RegisterPage() {
         if (file) {
             setProfileImage(file);
             const reader = new FileReader();
-            reader.onloadend = () => {
-                setImagePreview(reader.result as string);
-            };
+            reader.onloadend = () => setImagePreview(reader.result as string);
             reader.readAsDataURL(file);
         }
     };
@@ -42,9 +50,7 @@ export default function RegisterPage() {
     const removeImage = () => {
         setProfileImage(null);
         setImagePreview("");
-        if (fileInputRef.current) {
-            fileInputRef.current.value = "";
-        }
+        if (fileInputRef.current) fileInputRef.current.value = "";
     };
 
     const handleFormSubmit = async (e: React.FormEvent) => {
@@ -55,44 +61,38 @@ export default function RegisterPage() {
             setError("Passwords do not match");
             return;
         }
-
         if (formData.password.length < 6) {
             setError("Password must be at least 6 characters");
             return;
         }
 
         setIsLoading(true);
-
         try {
-            // Create FormData for file upload
             const submitData = new FormData();
             submitData.append("username", formData.username);
             submitData.append("email", formData.email);
             submitData.append("password", formData.password);
-            if (profileImage) {
-                submitData.append("profilePicture", profileImage);
-            }
+            if (registerAsAdmin) submitData.append("role", "admin");
+            if (profileImage) submitData.append("profilePicture", profileImage);
 
             const response = await authService.register(submitData);
 
             if (response.user) {
-                // Auto login after registration
                 const loginResponse = await authService.login({
                     email: formData.email,
                     password: formData.password,
                 });
-
                 if (loginResponse.user && loginResponse.token) {
                     setUser(loginResponse.user, loginResponse.token);
-                    router.push("/blogs");
+                    router.push(loginResponse.user.role === "admin" ? "/admin" : "/blogs");
                 } else {
                     router.push("/login");
                 }
             } else {
                 setError(response.message || "Registration failed");
             }
-        } catch (err) {
-            setError("Something went wrong. Please try again.");
+        } catch (err: any) {
+            setError(err?.response?.data?.message || "Something went wrong. Please try again.");
         } finally {
             setIsLoading(false);
         }
@@ -113,7 +113,7 @@ export default function RegisterPage() {
                 )}
 
                 <form onSubmit={handleFormSubmit} className="space-y-5">
-                    {/* Profile Picture Upload */}
+                    {/* Profile Picture */}
                     <div className="flex flex-col items-center">
                         <div className="relative">
                             {imagePreview ? (
@@ -155,12 +155,8 @@ export default function RegisterPage() {
                             Username
                         </label>
                         <input
-                            type="text"
-                            id="username"
-                            name="username"
-                            value={formData.username}
-                            onChange={handleInputChange}
-                            required
+                            type="text" id="username" name="username"
+                            value={formData.username} onChange={handleInputChange} required
                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition"
                             placeholder="johndoe"
                         />
@@ -171,12 +167,8 @@ export default function RegisterPage() {
                             Email Address
                         </label>
                         <input
-                            type="email"
-                            id="email"
-                            name="email"
-                            value={formData.email}
-                            onChange={handleInputChange}
-                            required
+                            type="email" id="email" name="email"
+                            value={formData.email} onChange={handleInputChange} required
                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition"
                             placeholder="you@example.com"
                         />
@@ -187,12 +179,8 @@ export default function RegisterPage() {
                             Password
                         </label>
                         <input
-                            type="password"
-                            id="password"
-                            name="password"
-                            value={formData.password}
-                            onChange={handleInputChange}
-                            required
+                            type="password" id="password" name="password"
+                            value={formData.password} onChange={handleInputChange} required
                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition"
                             placeholder="Create a password"
                         />
@@ -203,23 +191,43 @@ export default function RegisterPage() {
                             Confirm Password
                         </label>
                         <input
-                            type="password"
-                            id="confirmPassword"
-                            name="confirmPassword"
-                            value={formData.confirmPassword}
-                            onChange={handleInputChange}
-                            required
+                            type="password" id="confirmPassword" name="confirmPassword"
+                            value={formData.confirmPassword} onChange={handleInputChange} required
                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition"
                             placeholder="Confirm your password"
                         />
                     </div>
 
+                    {/* Admin option — only shown when no admin exists yet */}
+                    {adminExists === false && (
+                        <div className="border border-amber-200 bg-amber-50 rounded-lg p-4">
+                            <label className="flex items-center gap-3 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={registerAsAdmin}
+                                    onChange={(e) => setRegisterAsAdmin(e.target.checked)}
+                                    className="w-4 h-4 text-indigo-600 rounded"
+                                />
+                                <div>
+                                    <span className="font-semibold text-amber-800">Register as Admin</span>
+                                    <p className="text-xs text-amber-600 mt-0.5">
+                                        First-time only — no admin account exists yet.
+                                    </p>
+                                </div>
+                            </label>
+                        </div>
+                    )}
+
                     <button
                         type="submit"
-                        disabled={isLoading}
+                        disabled={isLoading || adminExists === null}
                         className="w-full bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        {isLoading ? "Creating Account..." : "Create Account"}
+                        {isLoading
+                            ? "Creating Account..."
+                            : registerAsAdmin
+                            ? "Create Admin Account"
+                            : "Create Account"}
                     </button>
                 </form>
 

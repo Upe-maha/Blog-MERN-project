@@ -1,6 +1,12 @@
 import apiClient from "@/lib/api";
 
 export const authService = {
+    // Check whether an admin account already exists — used by the register page
+    checkAdminExists: async (): Promise<{ adminExists: boolean }> => {
+        const response = await apiClient.get("/users/check-admin");
+        return response.data;
+    },
+
     register: async (formData: FormData) => {
         const response = await apiClient.post("/users", formData, {
             headers: { "Content-Type": "multipart/form-data" },

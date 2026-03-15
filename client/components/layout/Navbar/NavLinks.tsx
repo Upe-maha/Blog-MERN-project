@@ -5,13 +5,11 @@ import { useAuthStore } from "@/stores";
 import UserMenu from "./UserMenu";
 
 const NavLinks = () => {
-    const { isAuthenticated, isHydrated } = useAuthStore();
+    const { isAuthenticated, isHydrated, user } = useAuthStore();
 
     return (
         <>
-
-
-            {/* Don't render auth-dependent links until store has rehydrated from localStorage */}
+            {/* Render nothing until Zustand rehydrates from localStorage */}
             {isHydrated && (
                 isAuthenticated ? (
                     <>
@@ -21,6 +19,15 @@ const NavLinks = () => {
                         <Link href="/blogs/create" className="text-gray-700 hover:text-indigo-600">
                             Create Blog
                         </Link>
+                        {/* Dashboard link — only visible to admin */}
+                        {user?.role === "admin" && (
+                            <Link
+                                href="/admin"
+                                className="text-indigo-600 font-semibold hover:text-indigo-800"
+                            >
+                                Dashboard
+                            </Link>
+                        )}
                         <UserMenu />
                     </>
                 ) : (

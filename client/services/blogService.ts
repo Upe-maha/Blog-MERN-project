@@ -10,8 +10,11 @@ export const blogService = {
         return response.data;
     },
 
-    getAll: async () => {
-        const response = await apiClient.get("/blogs");
+    getAll: async (page: number = 1, limit: number = 5) => {
+        const response = await apiClient.get("/blogs", {
+            params: { page, limit },
+        });
+
         return response.data;
     },
 
