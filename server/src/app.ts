@@ -21,11 +21,11 @@ app.use(express.urlencoded({ extended: true }));
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
 // Routes
-app.use("/api/users",   userRouter);
-app.use("/api/blogs",   blogRouter);
+app.use("/api/users", userRouter);
+app.use("/api/blogs", blogRouter);
 app.use("/api/comments", commentRouter);
-app.use("/api/likes",   likeRouter);
-app.use("/api/admin",   adminRouter);
+app.use("/api/likes", likeRouter);
+app.use("/api/admin", adminRouter);
 
 // Health check
 app.get("/api/health", (req, res) => {
