@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
-import User from "../models/user";
-import { hashPassword, comparePassword } from "../utils/hashPassword";
+import User from "../models/user.js";
+import { hashPassword, comparePassword } from "../utils/hashPassword.js";
 import jwt from "jsonwebtoken";
 import fs from "fs";
 import path from "path";

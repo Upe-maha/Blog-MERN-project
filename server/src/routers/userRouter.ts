@@ -7,8 +7,8 @@ import {
     getUserById,
     updateUser,
     deleteUser,
-} from "../controllers/user.controller";
-import { uploadProfilePicture } from "../config/multer";
+} from "../controllers/user.controller.js";
+import { uploadProfilePicture } from "../config/multer.js";
 
 const userRouter = express.Router();
 

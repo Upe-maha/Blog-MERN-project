@@ -1,11 +1,11 @@
 import express from "express";
 import cors from "cors";
 import path from "path";
-import userRouter from "./routers/userRouter";
-import blogRouter from "./routers/blogRouter";
-import commentRouter from "./routers/commentRouter";
-import likeRouter from "./routers/likeRouter";
-import adminRouter from "./routers/adminRouter";
+import userRouter from "./routers/userRouter.js";
+import blogRouter from "./routers/blogRouter.js";
+import commentRouter from "./routers/commentRouter.js";
+import likeRouter from "./routers/likeRouter.js";
+import adminRouter from "./routers/adminRouter.js";
 
 const app = express();
 

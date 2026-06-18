@@ -1,12 +1,12 @@
 import express from "express";
-import { authenticate, requireAdmin } from "../middleware/auth.middleware";
+import { authenticate, requireAdmin } from "../middleware/auth.middleware.js";
 import {
     getAllUsersAdmin,
     toggleBlockUser,
     deleteUserAdmin,
     getAllBlogsAdmin,
     deleteAnyBlog,
-} from "../controllers/admin.controller";
+} from "../controllers/admin.controller.js";
 
 const adminRouter = express.Router();
 
