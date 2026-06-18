@@ -96,7 +96,7 @@ export const getAllBlogsAdmin = async (_req: Request, res: Response) => {
             .sort({ createdAt: -1 });
 
         const blogsWithCounts = await Promise.all(
-            blogs.map(async (blog) => {
+            blogs.map(async (blog: any) => {
                 const commentsCount = await Comment.countDocuments({ blog: blog._id });
                 const likesCount    = await Like.countDocuments({ blog: blog._id });
                 return { ...blog.toObject(), commentsCount, likesCount };

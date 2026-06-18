@@ -4,8 +4,10 @@ import Like from "../models/like.js";
 import fs from "fs";
 import path from "path";
 import { cursorTo } from "readline";
+import blog from "../models/blog.js";
 
-// Helper function to get image URL
+// Helper function to get image U
+// RL
 const getImageUrl = (filename: string | undefined): string => {
     if (!filename) return "";
     return `/uploads/blogs/${filename}`;
@@ -77,7 +79,7 @@ export const getAllBlogs = async (req: Request, res: Response) => {
         const totalBlogs = await Blog.countDocuments();
         // Add comments and likes count
         const blogsWithCounts = await Promise.all(
-            blogs.map(async (blog) => {
+            blogs.map(async (blog: any) => {
                 const commentsCount = await Comment.countDocuments({ blog: blog._id });
                 const likesCount = await Like.countDocuments({ blog: blog._id });
                 return {
@@ -213,7 +215,7 @@ export const getBlogsByUser = async (req: Request, res: Response) => {
             .sort({ createdAt: -1 });
 
         const blogsWithCounts = await Promise.all(
-            blogs.map(async (blog) => {
+            blogs.map(async (blog: any) => {
                 const commentsCount = await Comment.countDocuments({ blog: blog._id });
                 const likesCount = await Like.countDocuments({ blog: blog._id });
                 return {
