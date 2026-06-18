@@ -14,6 +14,7 @@ export const getImageUrl = (path: string | undefined): string => {
 
 const apiClient = axios.create({
     baseURL: API_URL,
+    withCredentials: true,
 });
 
 // Attach JWT token from persisted auth storage on every request
