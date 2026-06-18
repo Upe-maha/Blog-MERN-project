@@ -1,8 +1,8 @@
 import type { Request, Response } from "express";
-import User from "../models/user";
-import Blog from "../models/blog";
-import Comment from "../models/comment";
-import Like from "../models/like";
+import User from "../models/user.js";
+import Blog from "../models/blog.js";
+import Comment from "../models/comment.js";
+import Like from "../models/like.js";
 import fs from "fs";
 import path from "path";
 
