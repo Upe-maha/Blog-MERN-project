@@ -1,0 +1,42 @@
+# Impeccable — machine-local artifacts. The shared design contract (DESIGN.md, PRODUCT.md,
+# .impeccable/design.json, .impeccable/config.json) is committed; per-developer state is not.
+.impeccable/config.local.json
+.impeccable/live/
+.impeccable/cache/
+
+# Claude Code per-machine settings (the design hook lives here)
+.claude/settings.local.json
+
+# mongod binary cached by CI (MONGOMS_DOWNLOAD_DIR in .github/workflows/ci.yml)
+.mongodb-binaries/
+
+# Root-level catch-alls. The leading slash anchors each to the repo root on purpose: an unanchored
+# `.env*` would also match server/.env.example, which must stay committed.
+/.env
+/.env.*
+/node_modules/
+
+# OS and editor noise
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Markdown is ignored by default so scratch notes and generated reports stay out, but every
+# document the repository treats as a contract is negated back in below.
+#
+# ⚠️ Keep this list in step with the `.impeccable/` block above, which states that DESIGN.md and
+# PRODUCT.md are committed — an unqualified `*.md` silently contradicted it, and CLAUDE.md tells
+# every session to read DESIGN.md before touching UI. A doc that is not in a fresh clone cannot be
+# an implementation contract.
+#
+# ⚠️ Negation cannot rescue a file whose parent directory is excluded. These all work because only
+# `*.md` is ignored here, never `docs/`.
+*.md
+!README.md
+!*/README.md
+!CLAUDE.md
+!DESIGN.md
+!PRODUCT.md
+!SECURITY.md
+!docs/**/*.md

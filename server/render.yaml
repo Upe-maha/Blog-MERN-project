@@ -1,0 +1,65 @@
+# Render blueprint for the API. Committed so the deployment config is reviewable in the repo rather
+# than living only in a dashboard.
+#
+# Import it at https://dashboard.render.com/blueprints — or just mirror these settings by hand when
+# creating the service.
+services:
+  - type: web
+    name: marginalia-api
+    runtime: node
+    plan: free
+    rootDir: server
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+
+    # Render polls this and will not route traffic to an unhealthy instance. It reports Mongo's
+    # real connection state, so a database outage marks the deploy unhealthy instead of green.
+    healthCheckPath: /api/health
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      # PORT is deliberately absent. Render injects it, and env.ts reads it — hard-coding one here
+      # would bind the wrong port and fail the health check.
+
+      # sync: false means "prompt me in the dashboard, never store it in this file". Everything
+      # secret is set that way; nothing below is a credential.
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        # Render generates a strong value on first deploy. Rotating it logs every user out, because
+        # every previously issued token stops verifying.
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
+
+      # The exact Vercel origin, scheme included. A mismatch here is the "403 Origin not allowed"
+      # you will see in the browser console — cors() has an explicit allow-list, by design.
+      - key: CLIENT_URL
+        sync: false
+      # Optional comma-separated extras, e.g. a custom domain.
+      - key: CORS_ORIGINS
+        sync: false
+      # Lets any https://<something>.vercel.app preview deployment call the API.
+      - key: ALLOW_VERCEL_PREVIEWS
+        value: "true"
+
+      - key: LOG_LEVEL
+        value: info
+
+      # Atlas is a replica set, so the cascade deletes in user.service.ts can be transactional.
+      # Leave this off against a standalone mongod, which cannot do multi-document transactions.
+      - key: ENABLE_TRANSACTIONS
+        value: "true"
+
+      # Uploads. The key needs BOTH read and write ("create") permissions — a scoped read-only key
+      # authenticates fine and then 403s every upload. See server/.env.example.
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: CLOUDINARY_FOLDER
+        value: blog-mern
