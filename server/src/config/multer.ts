@@ -1,77 +1,48 @@
 import multer from "multer";
-import path from "path";
-import fs from "fs";
+import type { Request } from "express";
+import { AppError } from "../utils/AppError.js";
 
-// Create uploads directories if they don't exist
-const createUploadDirs = () => {
-    const dirs = ["uploads", "uploads/profiles", "uploads/blogs"];
-    dirs.forEach((dir) => {
-        const dirPath = path.join(process.cwd(), dir);
-        if (!fs.existsSync(dirPath)) {
-            fs.mkdirSync(dirPath, { recursive: true });
-        }
-    });
-};
+// memoryStorage, not diskStorage. Three things follow from that:
+//
+//  1. Nothing is ever written to a local filesystem, which is the entire point of Phase 7 — Render
+//     and Railway wipe the disk on every redeploy.
+//  2. persistUpload gets a Buffer, so it can verify what the file *actually is* rather than
+//     trusting the client's Content-Type header.
+//  3. There is no orphaned-file problem left to clean up: a rejected request drops the buffer when
+//     the request ends. discardUpload survives only as a no-op for that reason.
+//
+// The destination folder used to be inferred from the field name here. It is now an explicit
+// argument to persistUpload, so renaming a field can no longer silently file an image in the wrong
+// place.
+const storage = multer.memoryStorage();
 
-createUploadDirs();
+const ALLOWED_MIME = new Set(["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"]);
 
-// Storage configuration
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        // Determine folder based on fieldname or route
-        let uploadPath = "uploads/";
-
-        if (file.fieldname === "profilePicture") {
-            uploadPath = "uploads/profiles/";
-        } else if (file.fieldname === "blogImage") {
-            uploadPath = "uploads/blogs/";
-        }
-
-        cb(null, uploadPath);
-    },
-    filename: (req, file, cb) => {
-        // Create unique filename: timestamp-randomstring.extension
-        const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-        const ext = path.extname(file.originalname);
-        cb(null, `${file.fieldname}-${uniqueSuffix}${ext}`);
-    },
-});
-
-// File filter - only allow images
-const fileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
-    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"];
-
-    if (allowedTypes.includes(file.mimetype)) {
+// A cheap first pass on the client's claim, purely to reject the obvious before buffering 5 MB.
+// It is NOT the real check — file.mimetype is whatever the browser said it was. persistUpload
+// sniffs the buffer's magic bytes, and that is what actually decides.
+const fileFilter = (_req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+    if (ALLOWED_MIME.has(file.mimetype)) {
         cb(null, true);
     } else {
-        cb(new Error("Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed."));
+        // An AppError (not a bare Error) so the central error handler renders a 400 JSON body
+        // instead of Express's default HTML 500 page.
+        cb(new AppError(400, "Invalid file type. Only JPEG, PNG, GIF and WebP are allowed."));
     }
 };
 
-// Multer upload configurations
+// 5 MB for both. Blog covers used to allow 10 MB, which is more user-uploaded JPEG than is worth
+// paying to transform and store.
+const MAX_BYTES = 5 * 1024 * 1024;
+
 export const uploadProfilePicture = multer({
     storage,
     fileFilter,
-    limits: {
-        fileSize: 5 * 1024 * 1024, // 5MB max for profile pictures
-    },
+    limits: { fileSize: MAX_BYTES, files: 1 },
 }).single("profilePicture");
 
 export const uploadBlogImage = multer({
     storage,
     fileFilter,
-    limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB max for blog images
-    },
+    limits: { fileSize: MAX_BYTES, files: 1 },
 }).single("blogImage");
-
-// Generic upload for multiple use cases
-export const upload = multer({
-    storage,
-    fileFilter,
-    limits: {
-        fileSize: 10 * 1024 * 1024,
-    },
-});
-
-export default upload;
