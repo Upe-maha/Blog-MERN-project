@@ -1,23 +1,30 @@
 import express from "express";
-import {
-    likeBlog,
-    unlikeBlog,
-    getLikesByBlog,
-    checkUserLike
-} from "../controllers/like.controller.js";
+import { toggleLike, getMyLike, getLikesByBlog } from "../controllers/like.controller.js";
+import { authenticate } from "../middleware/auth.middleware.js";
+import { writeLimiter } from "../middleware/rateLimit.js";
+import { validate } from "../middleware/validate.js";
+import { blogIdParam, listLikesQuery } from "../schemas/index.js";
 
 const likeRouter = express.Router();
 
-// POST like a blog
-likeRouter.post("/", likeBlog);
+// One idempotent-per-click toggle replaces POST /likes + POST /likes/unlike, both of which took the
+// user id from the request body. The liker is the token holder and nothing else.
+likeRouter.post(
+    "/:blogId/toggle",
+    authenticate,
+    writeLimiter,
+    validate({ params: blogIdParam }),
+    toggleLike
+);
 
-// POST unlike a blog
-likeRouter.post("/unlike", unlikeBlog);
+// "me" is the token, not a path segment. The route this replaces was /check/:blogId/:userId, which
+// let any caller read any other account's like state.
+likeRouter.get("/me/:blogId", authenticate, validate({ params: blogIdParam }), getMyLike);
 
-// GET likes by blog ID
-likeRouter.get("/blog/:blogId", getLikesByBlog);
-
-// GET check if user liked a blog
-likeRouter.get("/check/:blogId/:userId", checkUserLike);
+likeRouter.get(
+    "/blog/:blogId",
+    validate({ params: blogIdParam, query: listLikesQuery }),
+    getLikesByBlog
+);
 
 export default likeRouter;

@@ -1,100 +1,86 @@
 import Comment from "../models/comment.js";
 import Blog from "../models/blog.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
+import { notFound, unauthorized } from "../utils/AppError.js";
+import type {
+    BlogIdParam,
+    CommentBodyInput,
+    ListCommentsQuery,
+    ObjectIdParam,
+} from "../schemas/index.js";
 
-// Add comment
-export const addComment = async (req: any, res: any) => {
-    const { blogId, userId, content } = req.body;
+const USER_FIELDS = "username profilePicture";
 
-    if (!blogId || !userId || !content) {
-        return res.status(400).json({ message: "Blog ID, User ID, and content are required" });
-    }
+export const addComment = asyncHandler(async (req, res) => {
+    // authenticate() runs first, so this is only ever undefined if the route is misconfigured.
+    if (!req.user) throw unauthorized();
 
-    try {
-        const blog = await Blog.findById(blogId);
-        if (!blog) {
-            return res.status(404).json({ message: "Blog not found" });
-        }
+    const { blogId } = req.valid.params as BlogIdParam;
+    const { content } = req.valid.body as CommentBodyInput;
 
-        const newComment = new Comment({
-            blog: blogId,
-            user: userId,
-            content
-        });
+    // exists() rather than findById(): nothing here reads a field off the blog, and the index-only
+    // lookup avoids pulling a 20 KB markdown body across the wire to answer a yes/no question.
+    const blog = await Blog.exists({ _id: blogId });
+    if (!blog) throw notFound("Blog not found");
 
-        await newComment.save();
+    const comment = await Comment.create({ blog: blogId, user: req.user.userId, content });
+    await comment.populate("user", USER_FIELDS);
 
-        // Update comments count
-        await Blog.findByIdAndUpdate(blogId, { $inc: { commentsCount: 1 } });
+    // The populated document goes back so the client can insert it optimistically rather than
+    // refetching the whole list to display one new row.
+    res.status(201).json({ message: "Comment added successfully", comment });
+});
 
-        const populatedComment = await Comment.findById(newComment._id)
-            .populate("user", "username profilePicture");
+export const getCommentsByBlog = asyncHandler(async (req, res) => {
+    const { blogId } = req.valid.params as BlogIdParam;
+    const { page, limit } = req.valid.query as ListCommentsQuery;
 
-        return res.status(201).json({ message: "Comment added successfully", comment: populatedComment });
-    } catch (error) {
-        console.log("Error:", error);
-        return res.status(500).json({ message: "Internal server error from addComment" });
-    }
-};
+    const skip = (page - 1) * limit;
 
-// Get comments by blog ID
-export const getCommentsByBlog = async (req: any, res: any) => {
-    const { blogId } = req.params;
+    // Both halves hit the same { blog: 1, createdAt: -1 } index, and they are independent, so they
+    // run concurrently rather than one after the other.
+    const [comments, total] = await Promise.all([
+        Comment.find({ blog: blogId })
+            .populate("user", USER_FIELDS)
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit)
+            .lean(),
+        Comment.countDocuments({ blog: blogId }),
+    ]);
 
-    try {
-        const comments = await Comment.find({ blog: blogId })
-            .populate("user", "username profilePicture")
-            .sort({ createdAt: -1 });
+    res.status(200).json({
+        comments,
+        page,
+        limit,
+        total,
+        hasMore: skip + comments.length < total,
+    });
+});
 
-        return res.status(200).json({ comments });
-    } catch (error) {
-        return res.status(500).json({ message: "Internal server error from getCommentsByBlog" });
-    }
-};
+export const updateComment = asyncHandler(async (req, res) => {
+    // requireOwnership(Comment, "user") has already proven the row exists and belongs to the
+    // caller, so a null result here would mean it was deleted in the microseconds between.
+    const { id } = req.valid.params as ObjectIdParam;
+    const { content } = req.valid.body as CommentBodyInput;
 
-// Delete comment
-export const deleteComment = async (req: any, res: any) => {
-    const { id } = req.params;
+    const comment = await Comment.findByIdAndUpdate(
+        id,
+        { content },
+        { new: true, runValidators: true }
+    ).populate("user", USER_FIELDS);
 
-    try {
-        const comment = await Comment.findById(id);
+    if (!comment) throw notFound("Comment not found");
 
-        if (!comment) {
-            return res.status(404).json({ message: "Comment not found" });
-        }
+    res.status(200).json({ message: "Comment updated successfully", comment });
+});
 
-        await Comment.findByIdAndDelete(id);
+export const deleteComment = asyncHandler(async (req, res) => {
+    const { id } = req.valid.params as ObjectIdParam;
 
-        // Update comments count
-        await Blog.findByIdAndUpdate(comment.blog, { $inc: { commentsCount: -1 } });
+    // requireCommentDeletePermission proved existence and permission; this is the write.
+    const comment = await Comment.findByIdAndDelete(id);
+    if (!comment) throw notFound("Comment not found");
 
-        return res.status(200).json({ message: "Comment deleted successfully" });
-    } catch (error) {
-        return res.status(500).json({ message: "Internal server error from deleteComment" });
-    }
-};
-
-// Update comment
-export const updateComment = async (req: any, res: any) => {
-    const { id } = req.params;
-    const { content } = req.body;
-
-    if (!content) {
-        return res.status(400).json({ message: "Content is required" });
-    }
-
-    try {
-        const updatedComment = await Comment.findByIdAndUpdate(
-            id,
-            { content },
-            { new: true }
-        ).populate("user", "username profilePicture");
-
-        if (!updatedComment) {
-            return res.status(404).json({ message: "Comment not found" });
-        }
-
-        return res.status(200).json({ message: "Comment updated successfully", comment: updatedComment });
-    } catch (error) {
-        return res.status(500).json({ message: "Internal server error from updateComment" });
-    }
-};
+    res.status(200).json({ message: "Comment deleted successfully" });
+});

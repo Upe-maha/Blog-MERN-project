@@ -1,92 +1,87 @@
+import { Types } from "mongoose";
 import Like from "../models/like.js";
 import Blog from "../models/blog.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
+import { notFound, unauthorized } from "../utils/AppError.js";
+import type { BlogIdParam, ListLikesQuery } from "../schemas/index.js";
 
-// Like a blog
-export const likeBlog = async (req: any, res: any) => {
-    const { blogId, userId } = req.body;
+// POST /api/likes/:blogId/toggle
+//
+// One endpoint, not a like/unlike pair. The old pair read `userId` from the body — so anyone could
+// like as anyone — and `likeBlog` ran findOne-then-create with a TOCTOU window between them: two
+// concurrent clicks both saw "not liked", both inserted, and the unique index fired E11000 as an
+// unhandled 500.
+//
+// findOneAndDelete and the upsert are each a single atomic document operation, so the race cannot
+// happen. If a duplicate still slips through, the error middleware renders E11000 as a 409.
+export const toggleLike = asyncHandler(async (req, res) => {
+    if (!req.user) throw unauthorized();
 
-    if (!blogId || !userId) {
-        return res.status(400).json({ message: "Blog ID and User ID are required" });
+    const { blogId } = req.valid.params as BlogIdParam;
+    const userId = req.user.userId;
+
+    // exists() rather than findById: nothing here reads a field off the blog, so there is no reason
+    // to pull a 20 KB markdown body across the wire to answer a yes/no question.
+    if (!(await Blog.exists({ _id: blogId }))) throw notFound("Blog not found");
+
+    const removed = await Like.findOneAndDelete({ blog: blogId, user: userId });
+    if (!removed) {
+        await Like.updateOne(
+            { blog: blogId, user: userId },
+            { $setOnInsert: { blog: blogId, user: userId } },
+            { upsert: true }
+        );
     }
 
-    try {
-        const blog = await Blog.findById(blogId);
-        if (!blog) {
-            return res.status(404).json({ message: "Blog not found" });
-        }
+    // The authoritative count comes back with the toggle. Without it the client increments its own
+    // number and drifts away from reality the moment anyone else likes the same post.
+    const likesCount = await Like.countDocuments({ blog: blogId });
 
-        // Check if already liked
-        const existingLike = await Like.findOne({ blog: blogId, user: userId });
-        if (existingLike) {
-            return res.status(400).json({ message: "You already liked this blog" });
-        }
+    // Per-user state: never cacheable, by any shared cache.
+    res.set("Cache-Control", "private, no-store");
+    res.status(200).json({ liked: !removed, likesCount });
+});
 
-        const newLike = new Like({
-            blog: blogId,
-            user: userId
-        });
+// GET /api/likes/me/:blogId
+//
+// The viewer's own state only. The route it replaces took the user id from the URL, so any caller
+// could ask whether any other account had liked a post.
+//
+// The blog list and detail responses already carry `likedByMe`, but the client cannot rely on that
+// here: those pages are fetched by a server component with no token and cached for everyone, so
+// their likedByMe is always false. This is where a signed-in reader's real state comes from.
+export const getMyLike = asyncHandler(async (req, res) => {
+    if (!req.user) throw unauthorized();
 
-        await newLike.save();
+    const { blogId } = req.valid.params as BlogIdParam;
 
-        // Update likes count
-        await Blog.findByIdAndUpdate(blogId, { $inc: { likesCount: 1 } });
+    const [liked, likesCount] = await Promise.all([
+        Like.exists({ blog: blogId, user: req.user.userId }),
+        Like.countDocuments({ blog: blogId }),
+    ]);
 
-        return res.status(201).json({ message: "Blog liked successfully" });
-    } catch (error) {
-        console.log("Error:", error);
-        return res.status(500).json({ message: "Internal server error from likeBlog" });
-    }
-};
+    res.set("Cache-Control", "private, no-store");
+    res.status(200).json({ liked: !!liked, likesCount });
+});
 
-// Unlike a blog
-export const unlikeBlog = async (req: any, res: any) => {
-    const { blogId, userId } = req.body;
+// GET /api/likes/blog/:blogId — who liked this post. Public, and paginated: it previously populated
+// every liker on the post in a single unbounded response.
+export const getLikesByBlog = asyncHandler(async (req, res) => {
+    const { blogId } = req.valid.params as BlogIdParam;
+    const { page, limit } = req.valid.query as ListLikesQuery;
 
-    if (!blogId || !userId) {
-        return res.status(400).json({ message: "Blog ID and User ID are required" });
-    }
+    const skip = (page - 1) * limit;
+    const filter = { blog: new Types.ObjectId(blogId) };
 
-    try {
-        const existingLike = await Like.findOne({ blog: blogId, user: userId });
+    const [likes, total] = await Promise.all([
+        Like.find(filter)
+            .populate("user", "username profilePicture")
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit)
+            .lean(),
+        Like.countDocuments(filter),
+    ]);
 
-        if (!existingLike) {
-            return res.status(400).json({ message: "You haven't liked this blog" });
-        }
-
-        await Like.findByIdAndDelete(existingLike._id);
-
-        // Update likes count
-        await Blog.findByIdAndUpdate(blogId, { $inc: { likesCount: -1 } });
-
-        return res.status(200).json({ message: "Blog unliked successfully" });
-    } catch (error) {
-        return res.status(500).json({ message: "Internal server error from unlikeBlog" });
-    }
-};
-
-// Get likes by blog ID
-export const getLikesByBlog = async (req: any, res: any) => {
-    const { blogId } = req.params;
-
-    try {
-        const likes = await Like.find({ blog: blogId })
-            .populate("user", "username profilePicture");
-
-        return res.status(200).json({ likes, count: likes.length });
-    } catch (error) {
-        return res.status(500).json({ message: "Internal server error from getLikesByBlog" });
-    }
-};
-
-// Check if user liked a blog
-export const checkUserLike = async (req: any, res: any) => {
-    const { blogId, userId } = req.params;
-
-    try {
-        const like = await Like.findOne({ blog: blogId, user: userId });
-
-        return res.status(200).json({ liked: !!like });
-    } catch (error) {
-        return res.status(500).json({ message: "Internal server error from checkUserLike" });
-    }
-};
+    res.status(200).json({ likes, page, limit, total, hasMore: skip + likes.length < total });
+});
