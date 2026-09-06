@@ -2,192 +2,407 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useCommentStore, useAuthStore } from "@/stores";
-import { getImageUrl } from "@/lib/api";
+import { formatDistanceToNow } from "date-fns";
+import { Loader2, MessageSquare } from "lucide-react";
+import { toast } from "sonner";
+import type { Comment } from "@/types";
+import { useAuthStore, useCommentStore } from "@/stores";
+import { emptyThread } from "@/stores/commentStore";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { UserAvatar } from "@/components/ui/user-avatar";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { CommentThreadSkeleton } from "@/components/skeletons";
+import { revalidateEngagement } from "@/app/actions";
 
-interface CommentSectionProps {
-    blogId: string;
+const MAX_LENGTH = 2000;
+// Below this the counter is noise; above it, it is the thing you need to see.
+const COUNTER_FROM = 1600;
+
+function timestamp(iso: string) {
+    const date = new Date(iso);
+    return {
+        relative: formatDistanceToNow(date, { addSuffix: true }),
+        absolute: date.toLocaleString("en-GB", { dateStyle: "long", timeStyle: "short" }),
+    };
 }
 
-const CommentSection = ({ blogId }: CommentSectionProps) => {
-    const { user, isAuthenticated } = useAuthStore();
-    const {
-        comments,
-        isLoading,
-        fetchCommentsByBlog,
-        addComment,
-        deleteComment,
-        clearComments,
-    } = useCommentStore();
+// One editor for both composing and editing, so the character cap, the counter and Enter-to-submit
+// cannot drift apart between the two.
+function CommentEditor({
+    value,
+    onChange,
+    onSubmit,
+    onCancel,
+    submitLabel,
+    pending,
+    label,
+    placeholder,
+    autoFocus,
+}: {
+    value: string;
+    onChange: (v: string) => void;
+    onSubmit: () => void;
+    onCancel?: () => void;
+    submitLabel: string;
+    pending: boolean;
+    label: string;
+    placeholder?: string;
+    autoFocus?: boolean;
+}) {
+    const trimmed = value.trim();
+    const tooLong = value.length > MAX_LENGTH;
+    const canSubmit = trimmed.length > 0 && !tooLong && !pending;
 
-    const [commentText, setCommentText] = useState("");
-    const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-    useEffect(() => {
-        fetchCommentsByBlog(blogId);
-        return () => {
-            clearComments();
-        };
-    }, [blogId, fetchCommentsByBlog, clearComments]);
-
-    const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-        setCommentText(e.target.value);
-        const ta = textareaRef.current;
-        if (ta) {
-            ta.style.height = "auto";
-            // cap at ~3 lines (72px ≈ 3 × 24px line-height)
-            ta.style.height = Math.min(ta.scrollHeight, 72) + "px";
-        }
-    };
-
-    const handleSubmit = async (e?: React.FormEvent) => {
-        e?.preventDefault();
-        if (!commentText.trim()) return;
-        if (!isAuthenticated || !user?._id) {
-            alert("Please login to comment");
-            return;
-        }
-        await addComment({ blogId, userId: user._id, content: commentText });
-        setCommentText("");
-        if (textareaRef.current) {
-            textareaRef.current.style.height = "24px";
-        }
-    };
-
-    // Enter submits, Shift+Enter adds a new line
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Enter posts, Shift+Enter breaks the line — kept from the original, which got this right.
+    const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
-            handleSubmit();
+            if (canSubmit) onSubmit();
         }
+        if (e.key === "Escape" && onCancel) onCancel();
     };
-
-    const handleDeleteComment = async (commentId: string) => {
-        if (confirm("Are you sure you want to delete this comment?")) {
-            await deleteComment(commentId);
-        }
-    };
-
-    const userImageUrl = getImageUrl(user?.profilePicture);
 
     return (
-        <div id="comments" className="bg-white rounded-2xl shadow-lg p-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-5">
-                Comments ({comments.length})
-            </h2>
+        <div className="space-y-2">
+            <Textarea
+                aria-label={label}
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                onKeyDown={onKeyDown}
+                placeholder={placeholder}
+                autoFocus={autoFocus}
+                aria-invalid={tooLong || undefined}
+                // field-sizing-content on the primitive grows the box as you type; the cap keeps a
+                // long comment from pushing the thread off screen.
+                className="max-h-56 min-h-11 resize-none py-2.5"
+            />
 
-            {/* Add Comment — inline input bar */}
-            {isAuthenticated ? (
-                <form
-                    onSubmit={handleSubmit}
-                    className="mb-6 flex items-end gap-2 border border-gray-300 rounded-2xl px-3 py-2 focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-transparent transition"
+            <div className="flex items-center justify-between gap-3">
+                <span
+                    aria-live="polite"
+                    className={`text-xs tabular-nums ${
+                        tooLong ? "text-destructive" : "text-muted-foreground"
+                    }`}
                 >
-                    {/* Current user avatar */}
-                    <div className="w-7 h-7 bg-indigo-500 rounded-full flex items-center justify-center text-white text-xs font-bold overflow-hidden shrink-0 mb-0.5">
-                        {userImageUrl ? (
-                            <img
-                                src={userImageUrl}
-                                alt={user?.username}
-                                className="w-full h-full object-cover"
-                            />
-                        ) : (
-                            user?.username?.charAt(0).toUpperCase()
-                        )}
-                    </div>
+                    {value.length >= COUNTER_FROM
+                        ? `${value.length.toLocaleString()} / ${MAX_LENGTH.toLocaleString()}`
+                        : ""}
+                </span>
 
-                    {/* Auto-grow textarea — max 3 lines, overflow hidden */}
-                    <textarea
-                        ref={textareaRef}
-                        value={commentText}
-                        onChange={handleTextareaChange}
-                        onKeyDown={handleKeyDown}
-                        placeholder="Write a comment… (Enter to post)"
-                        className="flex-1 resize-none outline-none bg-transparent text-sm text-gray-700 placeholder-gray-400 overflow-hidden leading-6"
-                        style={{ minHeight: "24px", maxHeight: "72px", height: "24px" }}
-                        rows={1}
-                    />
-
-                    {/* Send icon */}
-                    <button
-                        type="submit"
-                        disabled={!commentText.trim()}
-                        className="text-indigo-600 hover:text-indigo-700 disabled:opacity-30 transition shrink-0 mb-0.5"
-                        aria-label="Post comment"
-                    >
-                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-                        </svg>
-                    </button>
-                </form>
-            ) : (
-                <div className="mb-6 p-3 bg-gray-50 rounded-xl text-center">
-                    <p className="text-gray-500 text-sm mb-1">Login to post a comment</p>
-                    <Link href="/login" className="text-indigo-600 text-sm font-semibold hover:underline">
-                        Login here
-                    </Link>
+                <div className="flex items-center gap-1">
+                    {onCancel ? (
+                        <Button variant="ghost" size="sm" onClick={onCancel} disabled={pending}>
+                            Cancel
+                        </Button>
+                    ) : null}
+                    <Button size="sm" onClick={onSubmit} disabled={!canSubmit}>
+                        {pending ? <Loader2 className="animate-spin" /> : null}
+                        {submitLabel}
+                    </Button>
                 </div>
-            )}
-
-            {/* Comments List */}
-            {isLoading ? (
-                <div className="text-center py-6">
-                    <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
-                </div>
-            ) : comments.length === 0 ? (
-                <p className="text-gray-400 text-sm text-center py-6">
-                    No comments yet. Be the first to comment!
-                </p>
-            ) : (
-                <div className="space-y-4">
-                    {comments.map((comment) => {
-                        const commentUserImage = getImageUrl(comment.user?.profilePicture);
-                        return (
-                            <div key={comment._id} className="flex gap-3 pb-4 border-b border-gray-100 last:border-0 last:pb-0">
-
-                                {/* Commenter avatar with profile picture */}
-                                <div className="w-8 h-8 bg-indigo-500 rounded-full flex items-center justify-center text-white text-xs font-bold overflow-hidden shrink-0 mt-0.5">
-                                    {commentUserImage ? (
-                                        <img
-                                            src={commentUserImage}
-                                            alt={comment.user?.username}
-                                            className="w-full h-full object-cover"
-                                        />
-                                    ) : (
-                                        comment.user?.username?.charAt(0).toUpperCase()
-                                    )}
-                                </div>
-
-                                {/* Comment body */}
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex items-center justify-between gap-2">
-                                        <div className="flex items-center gap-2 min-w-0">
-                                            <span className="font-semibold text-gray-800 text-sm truncate">
-                                                {comment.user?.username}
-                                            </span>
-                                            <span className="text-gray-400 text-xs shrink-0">
-                                                {new Date(comment.createdAt).toLocaleDateString()}
-                                            </span>
-                                        </div>
-                                        {isAuthenticated && user?._id === comment.user?._id && (
-                                            <button
-                                                onClick={() => handleDeleteComment(comment._id)}
-                                                className="text-red-400 hover:text-red-600 text-xs shrink-0"
-                                            >
-                                                Delete
-                                            </button>
-                                        )}
-                                    </div>
-                                    <p className="text-gray-700 text-sm mt-1 break-words">
-                                        {comment.content}
-                                    </p>
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-            )}
+            </div>
         </div>
     );
-};
+}
+
+function CommentRow({
+    comment,
+    canEdit,
+    canDelete,
+    onSave,
+    onRequestDelete,
+}: {
+    comment: Comment;
+    canEdit: boolean;
+    canDelete: boolean;
+    onSave: (id: string, content: string) => Promise<boolean>;
+    onRequestDelete: (comment: Comment) => void;
+}) {
+    const [editing, setEditing] = useState(false);
+    const [draft, setDraft] = useState(comment.content);
+    const [saving, setSaving] = useState(false);
+
+    // A temporary id means the POST has not come back yet; the row is on screen but not yet a
+    // thing the server knows about, so it cannot be edited or deleted.
+    const pendingInsert = comment._id.startsWith("temp-");
+    const { relative, absolute } = timestamp(comment.createdAt);
+    const edited = comment.updatedAt !== comment.createdAt;
+
+    const save = async () => {
+        setSaving(true);
+        const ok = await onSave(comment._id, draft.trim());
+        setSaving(false);
+        if (ok) setEditing(false);
+    };
+
+    return (
+        <article
+            className={`border-border flex gap-3 border-b py-5 last:border-b-0 ${
+                pendingInsert ? "opacity-60" : ""
+            }`}
+        >
+            <UserAvatar
+                username={comment.user?.username}
+                profilePicture={comment.user?.profilePicture}
+                className="size-8 shrink-0"
+            />
+
+            <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                    <p className="text-[0.8125rem] tracking-[0.06em]">
+                        <span className="text-foreground">
+                            {comment.user?.username ?? "Unknown"}
+                        </span>
+                        <span className="text-muted-foreground" aria-hidden="true">
+                            {" · "}
+                        </span>
+                        <time className="text-muted-foreground" dateTime={comment.createdAt} title={absolute}>
+                            {relative}
+                        </time>
+                        {edited ? (
+                            <span className="text-muted-foreground"> · edited</span>
+                        ) : null}
+                    </p>
+
+                    {/* Mirrors the server's permission chain — it decides what to show, never what
+                        is allowed. Forge the request and the API answers 403. */}
+                    {!editing && !pendingInsert && (canEdit || canDelete) ? (
+                        <div className="flex shrink-0 items-center gap-0.5">
+                            {canEdit ? (
+                                <Button
+                                    variant="ghost"
+                                    size="xs"
+                                    onClick={() => {
+                                        setDraft(comment.content);
+                                        setEditing(true);
+                                    }}
+                                >
+                                    Edit
+                                    <span className="sr-only"> comment by {comment.user?.username}</span>
+                                </Button>
+                            ) : null}
+                            {canDelete ? (
+                                <Button
+                                    variant="ghost"
+                                    size="xs"
+                                    className="text-muted-foreground hover:text-destructive"
+                                    onClick={() => onRequestDelete(comment)}
+                                >
+                                    Delete
+                                    <span className="sr-only"> comment by {comment.user?.username}</span>
+                                </Button>
+                            ) : null}
+                        </div>
+                    ) : null}
+                </div>
+
+                {editing ? (
+                    <div className="mt-3">
+                        <CommentEditor
+                            value={draft}
+                            onChange={setDraft}
+                            onSubmit={save}
+                            onCancel={() => {
+                                setDraft(comment.content);
+                                setEditing(false);
+                            }}
+                            submitLabel="Save"
+                            pending={saving}
+                            label="Edit your comment"
+                            autoFocus
+                        />
+                    </div>
+                ) : (
+                    // Serif: a comment is read, not operated. whitespace-pre-line keeps the line
+                    // breaks the writer typed without letting raw markdown render.
+                    <p className="font-serif mt-1.5 leading-relaxed break-words whitespace-pre-line">
+                        {comment.content}
+                    </p>
+                )}
+            </div>
+        </article>
+    );
+}
+
+export function CommentSection({
+    blogId,
+    blogAuthorId,
+}: {
+    blogId: string;
+    blogAuthorId?: string;
+}) {
+    const { user, isAuthenticated, isHydrated } = useAuthStore();
+    const thread = useCommentStore((s) => s.byBlog[blogId]) ?? emptyThread;
+    const { fetchComments, fetchMoreComments, addComment, updateComment, deleteComment } =
+        useCommentStore();
+
+    const [draft, setDraft] = useState("");
+    const [posting, setPosting] = useState(false);
+    const [pendingDelete, setPendingDelete] = useState<Comment | null>(null);
+    const [deleting, setDeleting] = useState(false);
+
+    // Guards against the double fetch a Strict Mode remount would otherwise cause.
+    const loadedFor = useRef<string | null>(null);
+    useEffect(() => {
+        if (loadedFor.current === blogId) return;
+        loadedFor.current = blogId;
+        void fetchComments(blogId);
+    }, [blogId, fetchComments]);
+
+    const post = async () => {
+        const content = draft.trim();
+        if (!content) return;
+
+        if (!isAuthenticated || !user) {
+            // Nearly unreachable — the composer is only rendered for signed-in readers — but this
+            // is the path a token that expired mid-visit takes.
+            toast.error("Please sign in to comment.");
+            return;
+        }
+
+        setPosting(true);
+        const ok = await addComment(blogId, content, user);
+        setPosting(false);
+
+        if (ok) {
+            setDraft("");
+            // Same reason as likes, including the await: the comment is already on screen
+            // optimistically, so waiting here delays nothing the reader sees, and an error stops
+            // disappearing into an unobserved promise.
+            await revalidateEngagement(blogId);
+        } else {
+            toast.error(useCommentStore.getState().byBlog[blogId]?.error ?? "Could not post your comment.");
+        }
+    };
+
+    const save = async (id: string, content: string) => {
+        const ok = await updateComment(blogId, id, content);
+        if (ok) toast.success("Comment updated");
+        // An edit does not change the count, so no revalidation is needed — the cached row already
+        // shows the right number.
+        else toast.error(useCommentStore.getState().byBlog[blogId]?.error ?? "Could not save your edit.");
+        return ok;
+    };
+
+    const confirmDelete = async () => {
+        if (!pendingDelete) return;
+        setDeleting(true);
+        const ok = await deleteComment(blogId, pendingDelete._id);
+        setDeleting(false);
+        if (ok) {
+            toast.success("Comment deleted");
+            setPendingDelete(null);
+            await revalidateEngagement(blogId);
+        } else {
+            toast.error(useCommentStore.getState().byBlog[blogId]?.error ?? "Could not delete the comment.");
+        }
+    };
+
+    const isMine = (c: Comment) => !!user && c.user?._id === user._id;
+    // Moderation: the post's author can remove comments on their own essay, as can an admin.
+    const canModerate =
+        !!user && (user.role === "admin" || (!!blogAuthorId && user._id === blogAuthorId));
+
+    return (
+        <div>
+            <h2 className="text-xl font-medium tracking-[-0.01em]">
+                Comments
+                {thread.total > 0 ? (
+                    <span className="text-muted-foreground font-sans text-base font-normal">
+                        {" "}
+                        ({thread.total})
+                    </span>
+                ) : null}
+            </h2>
+
+            {/* isHydrated gates the composer so a signed-in reader never sees the sign-in prompt
+                flash before the persisted store rehydrates. */}
+            {!isHydrated ? (
+                <div className="border-border mt-5 h-24 rounded-lg border border-dashed" />
+            ) : isAuthenticated && user ? (
+                <div className="mt-5 flex gap-3">
+                    <UserAvatar
+                        username={user.username}
+                        profilePicture={user.profilePicture}
+                        className="mt-1 size-8 shrink-0"
+                    />
+                    <div className="min-w-0 flex-1">
+                        <CommentEditor
+                            value={draft}
+                            onChange={setDraft}
+                            onSubmit={post}
+                            submitLabel="Post"
+                            pending={posting}
+                            label="Write a comment"
+                            placeholder="Add to the conversation… (Enter to post)"
+                        />
+                    </div>
+                </div>
+            ) : (
+                <p className="text-muted-foreground mt-5 text-sm">
+                    <Link
+                        href={`/login?next=${encodeURIComponent(`/blogs/${blogId}#comments`)}`}
+                        className="text-primary rounded-sm underline underline-offset-4"
+                    >
+                        Sign in
+                    </Link>{" "}
+                    to join the conversation.
+                </p>
+            )}
+
+            <div className="mt-8">
+                {thread.isLoading ? (
+                    <CommentThreadSkeleton />
+                ) : thread.items.length === 0 ? (
+                    <div className="border-border text-muted-foreground flex items-center gap-2.5 border-t py-8 text-sm">
+                        <MessageSquare className="size-4 shrink-0" aria-hidden="true" />
+                        No comments yet.
+                    </div>
+                ) : (
+                    <div className="border-border border-t">
+                        {thread.items.map((comment) => (
+                            <CommentRow
+                                key={comment._id}
+                                comment={comment}
+                                canEdit={isMine(comment)}
+                                canDelete={isMine(comment) || canModerate}
+                                onSave={save}
+                                onRequestDelete={setPendingDelete}
+                            />
+                        ))}
+                    </div>
+                )}
+
+                {thread.hasMore ? (
+                    <div className="mt-6 flex justify-center">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => void fetchMoreComments(blogId)}
+                            disabled={thread.isFetchingMore}
+                        >
+                            {thread.isFetchingMore ? <Loader2 className="animate-spin" /> : null}
+                            {thread.isFetchingMore ? "Loading…" : "Load more comments"}
+                        </Button>
+                    </div>
+                ) : null}
+            </div>
+
+            <ConfirmDialog
+                open={!!pendingDelete}
+                onOpenChange={(open) => {
+                    if (!open) setPendingDelete(null);
+                }}
+                title="Delete this comment?"
+                description="The comment is removed for everyone. This cannot be undone."
+                confirmLabel="Delete comment"
+                destructive
+                loading={deleting}
+                onConfirm={confirmDelete}
+            />
+        </div>
+    );
+}
 
 export default CommentSection;
