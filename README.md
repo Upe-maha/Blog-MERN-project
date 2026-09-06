@@ -68,9 +68,6 @@ Some decisions worth calling out:
 - **Uploads never touch the filesystem.** multer buffers in memory, the buffer's magic bytes are
   checked (a `.jpg` that is really a text file is rejected), and Cloudinary stores it.
 
-Design and product constraints live in [DESIGN.md](DESIGN.md) and [PRODUCT.md](PRODUCT.md);
-[CLAUDE.md](CLAUDE.md) is the working guide to the codebase.
-
 ---
 
 ## Running it locally
@@ -228,7 +225,7 @@ blueprint for the API service.
 
 ## Security model
 
-Full detail in [SECURITY.md](SECURITY.md). In short:
+In short:
 
 - **Bearer JWT** in `localStorage`. `authenticate` re-reads `role` and `isBlocked` from the database
   on every request, so a block takes effect immediately and the role in a token is never trusted.

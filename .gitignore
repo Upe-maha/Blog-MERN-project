@@ -1,5 +1,5 @@
-# Impeccable — machine-local artifacts. The shared design contract (DESIGN.md, PRODUCT.md,
-# .impeccable/design.json, .impeccable/config.json) is committed; per-developer state is not.
+# Impeccable — machine-local artifacts. The design tokens (.impeccable/design.json,
+# .impeccable/config.json) are committed; per-developer state is not.
 .impeccable/config.local.json
 .impeccable/live/
 .impeccable/cache/
@@ -22,21 +22,20 @@ Thumbs.db
 *.swp
 *~
 
-# Markdown is ignored by default so scratch notes and generated reports stay out, but every
-# document the repository treats as a contract is negated back in below.
+# Internal working documents. The architecture guide, the design system, the product notes and the
+# phase-by-phase plan are kept local rather than published with the repository — they are how the
+# work is done, not part of what ships.
+CLAUDE.md
+DESIGN.md
+PRODUCT.md
+SECURITY.md
+/docs/
+
+# Markdown is ignored by default so scratch notes and generated reports stay out. README files are
+# the exception, because they are what a visitor to the repository reads first.
 #
-# ⚠️ Keep this list in step with the `.impeccable/` block above, which states that DESIGN.md and
-# PRODUCT.md are committed — an unqualified `*.md` silently contradicted it, and CLAUDE.md tells
-# every session to read DESIGN.md before touching UI. A doc that is not in a fresh clone cannot be
-# an implementation contract.
-#
-# ⚠️ Negation cannot rescue a file whose parent directory is excluded. These all work because only
-# `*.md` is ignored here, never `docs/`.
+# ⚠️ Negation cannot rescue a file whose parent directory is excluded, which is why `/docs/` above
+# is absolute and nothing inside it can be negated back in.
 *.md
 !README.md
 !*/README.md
-!CLAUDE.md
-!DESIGN.md
-!PRODUCT.md
-!SECURITY.md
-!docs/**/*.md
