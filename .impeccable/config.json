@@ -1,0 +1,23 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "broken-image",
+        "value": "*",
+        "files": [
+          "client/components/blog/PostRow.tsx"
+        ],
+        "createdAt": "2026-09-03T15:36:03.748Z",
+        "reason": "Claude: src is guarded by a truthy ternary on a string|null cover; the detector cannot see the guard"
+      },
+      {
+        "rule": "overused-font",
+        "value": "fraunces",
+        "createdAt": "2026-09-05T05:02:27.198Z",
+        "reason": "Fraunces is the project's mandated display/serif face — see DESIGN.md, The One Voice Rule. Chosen deliberately for its optical-size axis, not defaulted into."
+      }
+    ]
+  }
+}

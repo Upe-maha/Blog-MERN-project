@@ -1,0 +1,302 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-03T15:08:54.810Z",
+  "title": "Design System: The Reading Room",
+  "extensions": {
+    "colorMeta": {
+      "rust": {
+        "role": "primary",
+        "displayName": "Rust",
+        "canonical": "oklch(0.520 0.140 40)",
+        "tonalRamp": [
+          "oklch(0.15 0.06 40)",
+          "oklch(0.26 0.10 40)",
+          "oklch(0.37 0.13 40)",
+          "oklch(0.44 0.145 38)",
+          "oklch(0.52 0.14 40)",
+          "oklch(0.68 0.13 42)",
+          "oklch(0.82 0.08 44)",
+          "oklch(0.93 0.035 46)"
+        ]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Paper",
+        "canonical": "oklch(0.980 0.008 80)",
+        "tonalRamp": [
+          "oklch(0.19 0.008 60)",
+          "oklch(0.30 0.010 65)",
+          "oklch(0.44 0.012 70)",
+          "oklch(0.58 0.012 74)",
+          "oklch(0.72 0.011 76)",
+          "oklch(0.86 0.010 78)",
+          "oklch(0.955 0.009 78)",
+          "oklch(0.995 0.004 85)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "oklch(0.240 0.015 45)",
+        "tonalRamp": [
+          "oklch(0.16 0.014 45)",
+          "oklch(0.24 0.015 45)",
+          "oklch(0.34 0.015 47)",
+          "oklch(0.44 0.015 48)",
+          "oklch(0.52 0.015 50)",
+          "oklch(0.68 0.012 70)",
+          "oklch(0.84 0.010 76)",
+          "oklch(0.92 0.008 80)"
+        ]
+      },
+      "rule": {
+        "role": "neutral",
+        "displayName": "Rule",
+        "canonical": "oklch(0.900 0.010 75)",
+        "tonalRamp": [
+          "oklch(0.22 0.009 60)",
+          "oklch(0.30 0.010 60)",
+          "oklch(0.42 0.010 65)",
+          "oklch(0.56 0.010 70)",
+          "oklch(0.70 0.010 72)",
+          "oklch(0.82 0.010 74)",
+          "oklch(0.90 0.010 75)",
+          "oklch(0.96 0.008 78)"
+        ]
+      },
+      "alarm": {
+        "role": "tertiary",
+        "displayName": "Alarm",
+        "canonical": "oklch(0.550 0.210 18)",
+        "tonalRamp": [
+          "oklch(0.18 0.09 18)",
+          "oklch(0.28 0.14 18)",
+          "oklch(0.40 0.19 18)",
+          "oklch(0.55 0.21 18)",
+          "oklch(0.65 0.18 22)",
+          "oklch(0.76 0.13 22)",
+          "oklch(0.87 0.07 22)",
+          "oklch(0.95 0.03 22)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "The home hero only. One per page, at most."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Article titles and page h1s. WONK drops to 0 at this size."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Post-row titles, section headings, dialog titles."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Article prose. 18px Fraunces, capped at a 68ch measure."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Buttons, form labels, nav links. Geist, never a serif."
+      },
+      "meta": {
+        "displayName": "Meta",
+        "purpose": "Bylines, dates, reading time, tags, table headers."
+      }
+    },
+    "shadows": [
+      {
+        "name": "none",
+        "value": "none",
+        "purpose": "The system is flat at rest and has no shadow vocabulary. Depth is space, then a hairline rule, then a single tonal step."
+      },
+      {
+        "name": "focus-ring",
+        "value": "0 0 0 2px var(--background), 0 0 0 4px oklch(0.520 0.140 40)",
+        "purpose": "The only element permitted to appear above the page. Deliberately the most prominent state in the system."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-standard",
+        "value": "cubic-bezier(0.2, 0, 0, 1)",
+        "purpose": "The only easing. Applied to color, background-color and opacity."
+      },
+      {
+        "name": "duration-fast",
+        "value": "150ms",
+        "purpose": "Hover and focus state changes."
+      },
+      {
+        "name": "duration-base",
+        "value": "200ms",
+        "purpose": "Sheet and dialog transitions."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "sm",
+        "value": "640px"
+      },
+      {
+        "name": "md",
+        "value": "768px"
+      },
+      {
+        "name": "lg",
+        "value": "1024px"
+      },
+      {
+        "name": "xl",
+        "value": "1280px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The single filled button on a screen. Rust on paper.",
+      "html": "<button class=\"ds-btn-primary\">Publish post</button>",
+      "css": ".ds-btn-primary { background: oklch(0.520 0.140 40); color: oklch(0.980 0.008 80); font-family: Geist, ui-sans-serif, system-ui, sans-serif; font-size: 0.875rem; font-weight: 500; letter-spacing: 0.01em; line-height: 1.4; padding: 10px 20px; height: 40px; border: none; border-radius: 4px; cursor: pointer; transition: background-color 150ms cubic-bezier(0.2,0,0,1), color 150ms cubic-bezier(0.2,0,0,1); } .ds-btn-primary:hover { background: oklch(0.440 0.145 38); } .ds-btn-primary:focus-visible { outline: none; box-shadow: 0 0 0 2px oklch(0.980 0.008 80), 0 0 0 4px oklch(0.520 0.140 40); }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "The default for anything secondary. This system prefers ghost to outlined.",
+      "html": "<button class=\"ds-btn-ghost\">Cancel</button>",
+      "css": ".ds-btn-ghost { background: transparent; color: oklch(0.240 0.015 45); font-family: Geist, ui-sans-serif, system-ui, sans-serif; font-size: 0.875rem; font-weight: 500; letter-spacing: 0.01em; padding: 10px 12px; height: 40px; border: none; border-radius: 4px; cursor: pointer; transition: background-color 150ms cubic-bezier(0.2,0,0,1); } .ds-btn-ghost:hover { background: oklch(0.955 0.009 78); } .ds-btn-ghost:focus-visible { outline: none; box-shadow: 0 0 0 2px oklch(0.980 0.008 80), 0 0 0 4px oklch(0.520 0.140 40); }"
+    },
+    {
+      "name": "Destructive Button",
+      "kind": "button",
+      "refersTo": "button-destructive",
+      "description": "Never filled. A filled red button in a reading interface is a shout.",
+      "html": "<button class=\"ds-btn-destructive\">Delete account</button>",
+      "css": ".ds-btn-destructive { background: transparent; color: oklch(0.550 0.210 18); font-family: Geist, ui-sans-serif, system-ui, sans-serif; font-size: 0.875rem; font-weight: 500; padding: 10px 12px; height: 40px; border: none; border-radius: 4px; cursor: pointer; transition: background-color 150ms cubic-bezier(0.2,0,0,1); } .ds-btn-destructive:hover { background: color-mix(in oklch, oklch(0.550 0.210 18) 10%, transparent); } .ds-btn-destructive:focus-visible { outline: none; box-shadow: 0 0 0 2px oklch(0.980 0.008 80), 0 0 0 4px oklch(0.550 0.210 18); }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input-default",
+      "description": "Transparent with a hairline border. Labels are always visible; placeholders are never labels.",
+      "html": "<label class=\"ds-field\"><span class=\"ds-field-label\">Email address</span><input class=\"ds-input\" type=\"email\" placeholder=\"you@example.com\" /></label>",
+      "css": ".ds-field { display: flex; flex-direction: column; gap: 8px; } .ds-field-label { font-family: Geist, ui-sans-serif, system-ui, sans-serif; font-size: 0.875rem; font-weight: 500; color: oklch(0.240 0.015 45); } .ds-input { background: transparent; color: oklch(0.240 0.015 45); font-family: Geist, ui-sans-serif, system-ui, sans-serif; font-size: 0.875rem; height: 40px; padding: 10px 12px; border: 1px solid oklch(0.900 0.010 75); border-radius: 4px; transition: border-color 150ms cubic-bezier(0.2,0,0,1); } .ds-input::placeholder { color: oklch(0.520 0.015 50); } .ds-input:focus-visible { outline: none; border-color: oklch(0.520 0.140 40); box-shadow: 0 0 0 2px oklch(0.980 0.008 80), 0 0 0 4px oklch(0.520 0.140 40); }"
+    },
+    {
+      "name": "Post Row",
+      "kind": "custom",
+      "refersTo": "post-row",
+      "description": "The signature component. Replaces the card grid: a ruled row with no border, background, shadow or radius.",
+      "html": "<a class=\"ds-post-row\" href=\"#\"><div class=\"ds-post-body\"><h3 class=\"ds-post-title\">On writing software slowly</h3><p class=\"ds-post-excerpt\">There is a kind of speed that comes only from refusing to hurry, and most of what we call velocity is its opposite.</p><p class=\"ds-post-meta\">Upendra &middot; 12 min &middot; Mar 2026</p></div><div class=\"ds-post-thumb\"></div></a>",
+      "css": ".ds-post-row { display: flex; gap: 24px; align-items: flex-start; justify-content: space-between; padding: 24px 16px; margin: 0 -16px; border-bottom: 1px solid oklch(0.900 0.010 75); text-decoration: none; transition: background-color 150ms cubic-bezier(0.2,0,0,1); } .ds-post-row:hover { background: oklch(0.955 0.009 78); } .ds-post-row:hover .ds-post-title { color: oklch(0.520 0.140 40); } .ds-post-body { max-width: 42rem; } .ds-post-title { font-family: Fraunces, Georgia, serif; font-size: 1.25rem; font-weight: 500; line-height: 1.3; letter-spacing: -0.01em; color: oklch(0.240 0.015 45); margin: 0; transition: color 150ms cubic-bezier(0.2,0,0,1); } .ds-post-excerpt { font-family: Fraunces, Georgia, serif; font-size: 1rem; line-height: 1.6; color: oklch(0.520 0.015 50); margin: 8px 0 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; } .ds-post-meta { font-family: Geist, ui-sans-serif, system-ui, sans-serif; font-size: 0.8125rem; letter-spacing: 0.06em; color: oklch(0.520 0.015 50); margin: 16px 0 0; } .ds-post-thumb { flex: none; width: 96px; height: 96px; border-radius: 2px; background: oklch(0.955 0.009 78); }"
+    },
+    {
+      "name": "Navigation Bar",
+      "kind": "nav",
+      "refersTo": "nav",
+      "description": "Sticky, translucent paper, closed by a single hairline. Active link is the only rust element.",
+      "html": "<nav class=\"ds-nav\"><span class=\"ds-nav-mark\">The Reading Room</span><div class=\"ds-nav-links\"><a class=\"ds-nav-link ds-nav-link-active\" href=\"#\">Essays</a><a class=\"ds-nav-link\" href=\"#\">About</a></div></nav>",
+      "css": ".ds-nav { display: flex; align-items: center; justify-content: space-between; height: 64px; padding: 0 24px; background: color-mix(in oklch, oklch(0.980 0.008 80) 80%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid oklch(0.900 0.010 75); } .ds-nav-mark { font-family: Fraunces, Georgia, serif; font-size: 1.25rem; font-weight: 500; letter-spacing: -0.01em; color: oklch(0.240 0.015 45); } .ds-nav-links { display: flex; gap: 24px; } .ds-nav-link { font-family: Geist, ui-sans-serif, system-ui, sans-serif; font-size: 0.875rem; font-weight: 500; color: oklch(0.520 0.015 50); text-decoration: none; transition: color 150ms cubic-bezier(0.2,0,0,1); } .ds-nav-link:hover { color: oklch(0.240 0.015 45); } .ds-nav-link-active { color: oklch(0.520 0.140 40); }"
+    },
+    {
+      "name": "Avatar",
+      "kind": "custom",
+      "refersTo": "avatar",
+      "description": "Circular with a hairline border and two uppercase initials in Meta type.",
+      "html": "<span class=\"ds-avatar\">UM</span>",
+      "css": ".ds-avatar { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 9999px; border: 1px solid oklch(0.900 0.010 75); background: oklch(0.955 0.009 78); color: oklch(0.520 0.015 50); font-family: Geist, ui-sans-serif, system-ui, sans-serif; font-size: 0.8125rem; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; }"
+    },
+    {
+      "name": "Tag",
+      "kind": "chip",
+      "refersTo": "tag",
+      "description": "Outline-free, quiet, Meta type. Never filled with the accent.",
+      "html": "<span class=\"ds-tag\">Engineering</span>",
+      "css": ".ds-tag { display: inline-block; padding: 2px 10px; border: 1px solid oklch(0.900 0.010 75); border-radius: 9999px; background: transparent; color: oklch(0.520 0.015 50); font-family: Geist, ui-sans-serif, system-ui, sans-serif; font-size: 0.8125rem; letter-spacing: 0.06em; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Reading Room",
+    "overview": "A reading room is quiet on purpose. The furniture is good but it does not introduce itself; the light is warm; nothing blinks. Everything in this system is arranged so that the writing is the only thing on the page asking for attention. Chrome recedes to the edges, metadata whispers in a small sans, and the single warm accent appears rarely enough that when it does appear you look at it.\n\nThe material is paper and ink, not glass and plastic. The ground is a warm off-white with a trace of yellow in it, never pure #fff; text is a warm near-black, never pure #000. Structure is drawn with hairline rules and generous space, not with boxes stacked on boxes. Where a lesser system would reach for a card, this one reaches for a horizontal rule and forty pixels of air. Depth is tonal, and there are no shadows at rest anywhere in the system.\n\nDark mode is not an inversion; it is the same room at night. Warm dark brown-black stands in for paper, the ink lightens to a warm off-white, and the rust brightens just enough to hold its contrast. The reading experience is identical in either theme, which is the point.",
+    "keyCharacteristics": [
+      "Paper ground and warm ink; never pure black or pure white",
+      "Hairline rules and air instead of cards and shadows",
+      "One warm accent (rust), used on no more than 10% of any screen",
+      "Serif for everything the reader reads; sans only for controls and metadata",
+      "Flat at rest - the focus ring is the only thing that ever lifts",
+      "Generous measure: prose never exceeds ~68 characters per line"
+    ],
+    "rules": [
+      {
+        "name": "The One Voice Rule",
+        "body": "Rust covers no more than 10% of any screen. If a second element wants to be rust, one of them is wrong. Its rarity is the entire reason it works.",
+        "section": "colors"
+      },
+      {
+        "name": "The No Pure Values Rule",
+        "body": "#000 and #fff never appear. Every neutral in this system carries hue. A pure grey anywhere is a bug, not a choice.",
+        "section": "colors"
+      },
+      {
+        "name": "The Rust Is Not Alarm Rule",
+        "body": "Rust means act; Alarm means destroy. They must never be swapped, and a destructive button is never rust-filled.",
+        "section": "colors"
+      },
+      {
+        "name": "The Serif Reads, The Sans Operates Rule",
+        "body": "If a human reads it for meaning, it is Fraunces. If a human clicks, types into, or scans it as an instrument, it is Geist. A serif button is wrong; a sans paragraph is wrong.",
+        "section": "typography"
+      },
+      {
+        "name": "The 68 Character Rule",
+        "body": "Prose measure never exceeds 68ch, at any breakpoint. Wide viewports get more margin, never longer lines.",
+        "section": "typography"
+      },
+      {
+        "name": "The One Display Rule",
+        "body": "Display size appears once per page or not at all. A second one halves the value of the first.",
+        "section": "typography"
+      },
+      {
+        "name": "The Air Before Ornament Rule",
+        "body": "When a layout feels unresolved, the first correction is more space, not more decoration.",
+        "section": "layout"
+      },
+      {
+        "name": "The Flat Rule",
+        "body": "No shadows. Not on hover, not on cards, not on dropdowns. A floating surface earns separation from a hairline border and a tonal step, never a blur.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Hairline Rule",
+        "body": "A 1px rule is the default way to divide anything. Reach for it before reaching for a background change, a card, or a gap.",
+        "section": "shapes"
+      }
+    ],
+    "dos": [
+      "Do divide content with a 1px Rule hairline and 24px+ of padding. It is the system's signature.",
+      "Do keep prose at 18px Fraunces with a 68ch measure and 1.7 line-height.",
+      "Do use Geist for anything operable and Fraunces for anything readable.",
+      "Do let the accent be rare. One rust element per screen is usually correct.",
+      "Do state depth with space and tone; a hairline is the strongest divider you are permitted.",
+      "Do give every interactive element a visible 2px Rust focus ring - this is a product requirement, not a nicety.",
+      "Do design the empty state and the cold-start state; the API can take ~50s to wake, so a first visit frequently is the loading state."
+    ],
+    "donts": [
+      "Don't add a box-shadow. Anywhere. The system has no shadow vocabulary.",
+      "Don't wrap post lists in cards, and don't build a 3-up card grid of posts. Rows and rules.",
+      "Don't use pure #000, pure #fff, or any zero-chroma grey.",
+      "Don't set prose in a sans-serif, or a button label in a serif.",
+      "Don't use rust for anything destructive, or alarm for anything ordinary.",
+      "Don't exceed 68ch of prose measure to fill a wide viewport.",
+      "Don't let a page declare its own max-width - the layout Container owns page width.",
+      "Don't introduce gradients, glows, glassmorphism, or a second accent hue.",
+      "Don't animate anything but color, opacity and background over 150-200ms. No entrance animations on content, no hover translation, no bounce easing."
+    ]
+  }
+}
