@@ -1,117 +1,164 @@
-"use client";
-
-import { useEffect } from "react";
-import { useParams } from "next/navigation";
-import { useBlogStore } from "@/stores";
+import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
+import { notFound } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
+import { getBlog } from "@/lib/server-api";
 import { getImageUrl } from "@/lib/api";
+import { siteUrl } from "@/app/layout";
+import { toPlainText, truncate } from "@/lib/text";
+import { UserAvatar } from "@/components/ui/user-avatar";
+import Markdown from "@/components/blog/Markdown";
+import BlogActions from "./blog-actions";
 import LikeSection from "@/components/blog/LikeSection";
 import CommentSection from "@/components/blog/CommentSection";
 
-export default function SingleBlogPage() {
-    const params = useParams();
-    const blogId = params.id as string;
+type Params = { params: Promise<{ id: string }> };
 
-    const { currentBlog, isLoading: blogLoading, fetchBlogById, clearCurrentBlog } = useBlogStore();
+// This is what a crawler and a link preview actually read. Before this the route was "use client"
+// fetching in an effect, so every share of every post previewed as an empty spinner.
+export async function generateMetadata({ params }: Params): Promise<Metadata> {
+    const { id } = await params;
+    const blog = await getBlog(id);
 
-    useEffect(() => {
-        fetchBlogById(blogId);
-        return () => {
-            clearCurrentBlog();
-        };
-    }, [blogId, fetchBlogById, clearCurrentBlog]);
+    // notFound() here, not just in the component. Returning metadata successfully lets Next commit
+    // the response before the page throws, which produced a soft 404: the right page rendered with
+    // a 200 status, telling crawlers a missing post was a real one.
+    if (!blog) notFound();
 
-    if (blogLoading) {
-        return (
-            <div className="min-h-[60vh] flex items-center justify-center">
-                <div className="text-center">
-                    <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                    <p className="text-gray-600">Loading blog...</p>
-                </div>
-            </div>
-        );
-    }
+    // Plain text, not raw markdown — a preview card reading "## The case for patience"
+    // is a bug the reader meets before they ever reach the page.
+    const description = truncate(toPlainText(blog.description), 155);
 
-    if (!currentBlog) {
-        return (
-            <div className="min-h-[60vh] flex items-center justify-center">
-                <div className="text-center">
-                    <div className="text-6xl mb-4">😢</div>
-                    <h2 className="text-2xl font-bold text-gray-800 mb-2">Blog not found</h2>
-                    <Link href="/blogs" className="text-indigo-600 hover:underline">
-                        ← Back to blogs
-                    </Link>
-                </div>
-            </div>
-        );
-    }
+    return {
+        title: blog.title,
+        description,
+        alternates: { canonical: `/blogs/${id}` },
+        openGraph: {
+            type: "article",
+            title: blog.title,
+            description,
+            url: `/blogs/${id}`,
+            publishedTime: blog.createdAt,
+            modifiedTime: blog.updatedAt,
+            authors: blog.author?.username ? [blog.author.username] : undefined,
+            // No `images` key on purpose. Setting one here — even to undefined — suppresses the
+            // file-convention image from opengraph-image.tsx, which is how this page ended up with
+            // no og:image at all. The generated card is also the better preview: it always exists,
+            // and it carries the title, author and date rather than a cropped cover photo.
+        },
+        twitter: {
+            // Unconditional, because the generated card is always there.
+            card: "summary_large_image",
+            title: blog.title,
+            description,
+        },
+    };
+}
 
-    const blogImageUrl = getImageUrl(currentBlog.imageUrl);
-    const authorImageUrl = getImageUrl(currentBlog.author?.profilePicture);
+export default async function BlogPage({ params }: Params) {
+    const { id } = await params;
+    const blog = await getBlog(id);
+
+    // notFound() renders the 404 route with a real 404 status. The old page rendered its own
+    // "not found" markup with a 200, which told crawlers the missing post was a real page.
+    if (!blog) notFound();
+
+    const cover = blog.imageUrl ? getImageUrl(blog.imageUrl) : null;
+    const published = new Date(blog.createdAt);
+
+    // Rendered from the server component, so a crawler gets it in the HTML rather than after a
+    // hydration it may never perform. dangerouslySetInnerHTML is the documented way to emit a JSON-LD
+    // script: React would otherwise escape the quotes and hand Google an unparseable blob.
+    const jsonLd = {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        headline: blog.title,
+        description: truncate(toPlainText(blog.description), 155),
+        datePublished: blog.createdAt,
+        dateModified: blog.updatedAt,
+        author: blog.author?.username
+            ? {
+                  "@type": "Person",
+                  name: blog.author.username,
+                  ...(blog.author._id ? { url: `${siteUrl}/users/${blog.author._id}` } : {}),
+              }
+            : undefined,
+        ...(cover ? { image: [cover] } : {}),
+        mainEntityOfPage: { "@type": "WebPage", "@id": `${siteUrl}/blogs/${id}` },
+        publisher: { "@type": "Organization", name: "Marginalia", url: siteUrl },
+        wordCount: blog.description.trim().split(/\s+/).length,
+        commentCount: blog.commentsCount ?? 0,
+    };
 
     return (
-        <div className="max-w-3xl mx-auto px-4 py-10">
-            {/* Back Button */}
-            <Link href="/blogs" className="text-indigo-600 hover:underline mb-6 inline-block">
-                ← Back to blogs
+        <div className="max-w-reading py-4">
+            <script
+                type="application/ld+json"
+                dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+            />
+            <Link
+                href="/blogs"
+                className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 rounded-sm text-sm transition-colors"
+            >
+                <ArrowLeft className="size-4" aria-hidden="true" />
+                All essays
             </Link>
 
-            {/* Blog Post Card */}
-            <article className="bg-white rounded-2xl shadow-lg overflow-hidden mb-8">
+            <article className="mt-8">
+                <h1 className="text-[clamp(1.75rem,4vw,2.75rem)] leading-[1.15] font-normal text-balance">
+                    {blog.title}
+                </h1>
 
-                {/* Author Info — top */}
-                <div className="px-6 pt-6 pb-4 flex items-center border-b border-gray-100">
-                    <div className="w-12 h-12 bg-indigo-500 rounded-full flex items-center justify-center text-white text-lg font-bold overflow-hidden shrink-0">
-                        {authorImageUrl ? (
-                            <img
-                                src={authorImageUrl}
-                                alt={currentBlog.author?.username}
-                                className="w-full h-full object-cover"
-                            />
-                        ) : (
-                            currentBlog.author?.username?.charAt(0).toUpperCase()
-                        )}
-                    </div>
-                    <div className="ml-4">
-                        <p className="font-semibold text-gray-800">{currentBlog.author?.username}</p>
-                        <p className="text-gray-500 text-sm">
-                            {new Date(currentBlog.createdAt).toLocaleDateString("en-US", {
-                                year: "numeric",
-                                month: "long",
+                <div className="border-border mt-6 flex flex-wrap items-center gap-x-3 gap-y-2 border-b pb-6">
+                    <UserAvatar
+                        username={blog.author?.username}
+                        profilePicture={blog.author?.profilePicture}
+                        className="size-9"
+                    />
+                    <div className="text-muted-foreground text-[0.8125rem] tracking-[0.06em]">
+                        <span className="text-foreground">{blog.author?.username ?? "Unknown"}</span>
+                        <span aria-hidden="true"> · </span>
+                        <time dateTime={blog.createdAt}>
+                            {published.toLocaleDateString("en-GB", {
                                 day: "numeric",
+                                month: "long",
+                                year: "numeric",
                             })}
-                        </p>
+                        </time>
+                        <span aria-hidden="true"> · </span>
+                        <span>{blog.readingMinutes} min read</span>
                     </div>
                 </div>
 
-                {/* Title + Description */}
-                <div className="px-6 py-5">
-                    <h1 className="text-3xl font-bold text-gray-900 mb-4">{currentBlog.title}</h1>
-                    <div className="text-gray-700 leading-relaxed whitespace-pre-wrap">
-                        {currentBlog.description}
-                    </div>
-                </div>
-
-                {/* Image — natural aspect ratio, edge-to-edge */}
-                {blogImageUrl && (
-                    <img
-                        src={blogImageUrl}
-                        alt={currentBlog.title}
-                        className="w-full h-auto"
+                {/* Above the body, where a cover image belongs. It used to render *after* the text,
+                    which is why the article read oddly. */}
+                {cover ? (
+                    <Image
+                        src={cover}
+                        alt=""
+                        width={1200}
+                        height={675}
+                        sizes="(min-width: 42rem) 42rem, 100vw"
+                        priority
+                        className="border-border mt-8 w-full rounded-sm border object-cover"
                     />
-                )}
+                ) : null}
 
-                {/* Like Section */}
-                <div className="px-6">
-                    <LikeSection
-                        blogId={blogId}
-                        initialLikesCount={currentBlog.likesCount || 0}
-                    />
+                {/* prose is themed in globals.css: 18px Fraunces on a 68ch measure. */}
+                <div className="prose mt-8">
+                    <Markdown>{blog.description}</Markdown>
                 </div>
             </article>
 
-            {/* Comments Section */}
-            <CommentSection blogId={blogId} />
+            <div className="border-border mt-10 flex flex-wrap items-center justify-between gap-4 border-t pt-6">
+                <LikeSection blogId={blog._id} initialLikesCount={blog.likesCount ?? 0} />
+                <BlogActions blogId={blog._id} authorId={blog.author?._id} />
+            </div>
+
+            <section id="comments" className="mt-12 scroll-mt-20">
+                <CommentSection blogId={blog._id} blogAuthorId={blog.author?._id} />
+            </section>
         </div>
     );
 }

@@ -1,51 +1,271 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@plugin "@tailwindcss/typography";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@custom-variant dark (&:is(.dark *));
 
-/* Tailwind theme mapping */
+/* ---------------------------------------------------------------------------
+   The Reading Room — see DESIGN.md at the repo root for the full contract.
+
+   Paper and ink, not glass and plastic. Structure is drawn with hairline rules
+   and space; there is no shadow vocabulary. One warm accent (rust), used on
+   ≤10% of any screen. Every neutral carries hue — a zero-chroma grey is a bug.
+--------------------------------------------------------------------------- */
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+
+  /* Fraunces reads, Geist operates. The reader always reads a serif; anything
+     you click, type into or scan as an instrument is the sans. */
   --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-serif: var(--font-fraunces);
+  --font-display: var(--font-fraunces);
+  /* The system stack: nothing renders in mono today, so shipping a webfont for it was pure
+     weight on every page. The token stays so `font-mono` keeps working if something needs it. */
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-surface-hover: var(--surface-hover);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+
+  /* Near-square and quiet. Small enough to soften a corner, never large enough
+     to read as a pill — except 4xl, which is the tag/badge pill. */
+  --radius-sm: 2px;
+  --radius-md: 3px;
+  --radius-lg: 4px;
+  --radius-xl: 6px;
+  --radius-2xl: 8px;
+  --radius-3xl: 12px;
+  --radius-4xl: 9999px;
+
+  /* The reading measures, as `max-w-reading` / `max-w-feed`. Deliberately not
+     named `prose`, which would silently shadow Tailwind's built-in max-w-prose.
+     Prose never exceeds 68ch at any breakpoint — wide viewports get margin. */
+  --container-reading: 42rem;
+  --container-feed: 48rem;
+  /* The page container's own width, so `Container` names it rather than reaching for max-w-6xl. */
+  --container-page: 72rem;
+
+  /* Motion. DESIGN.md §32: 150ms for state changes, 200ms for anything larger, ease-out always.
+     Nothing here is long enough to be noticed as animation. */
+  --duration-fast: 150ms;
+  --duration-standard: 200ms;
+  --ease-standard: ease-out;
+
+  /* Control geometry. DESIGN.md §14/§16 put the default control at 40px, and §12 asks for a ~44px
+     effective touch target — which a 40px control with its focus ring and spacing satisfies. */
+  --size-control: 40px;
+  --size-control-sm: 32px;
+  --size-control-xs: 28px;
+
+  /* The whole layering vocabulary, in one place. DESIGN.md §48: six conceptual levels and no
+     arbitrary values scattered through components. */
+  --z-base: 0;
+  --z-nav: 30;
+  --z-dropdown: 40;
+  --z-sheet: 50;
+  --z-dialog: 60;
+  --z-toast: 70;
+  /* Above everything: the skip link must never be covered by a layer it cannot dismiss. */
+  --z-skip: 80;
 }
 
-/* Dark mode */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+:root {
+  /* Paper */
+  --background: oklch(0.98 0.008 80);
+  --card: oklch(0.995 0.004 85);
+  --card-foreground: oklch(0.24 0.015 45);
+  --popover: oklch(0.995 0.004 85);
+  --popover-foreground: oklch(0.24 0.015 45);
+
+  /* Ink */
+  --foreground: oklch(0.24 0.015 45);
+  --muted: oklch(0.955 0.009 78);
+  /* The pointed-at state, one step deeper than --muted so it reads at a glance. */
+  --surface-hover: oklch(0.918 0.013 78);
+  --muted-foreground: oklch(0.52 0.015 50);
+  --secondary: oklch(0.955 0.009 78);
+  --secondary-foreground: oklch(0.24 0.015 45);
+  --accent: oklch(0.955 0.009 78);
+  --accent-foreground: oklch(0.24 0.015 45);
+
+  /* Rust — the one voice. */
+  --primary: oklch(0.52 0.14 40);
+  --primary-foreground: oklch(0.98 0.008 80);
+  /* rust-deep. The sanctioned hover for a filled action — a real colour, not an opacity fade,
+     which would let the paper beneath show through and shift with whatever sits behind it. */
+  --primary-hover: oklch(0.44 0.145 38);
+
+  /* Alarm is not rust: hue 18 and high chroma mean *destroy*, never *act*.
+     0.50, not 0.55: at 0.55 the alarm text measured 4.35:1 over its own hover tint, just under
+     the 4.5:1 that DESIGN.md §37 requires for body-sized text. */
+  --destructive: oklch(0.5 0.21 18);
+
+  /* The hairline. The most-used non-text colour in the system. */
+  --border: oklch(0.9 0.01 75);
+  --input: oklch(0.9 0.01 75);
+  --ring: oklch(0.52 0.14 40);
+
+  --chart-1: oklch(0.52 0.14 40);
+  --chart-2: oklch(0.68 0.11 75);
+  --chart-3: oklch(0.55 0.06 150);
+  --chart-4: oklch(0.62 0.09 25);
+  --chart-5: oklch(0.48 0.06 250);
+
+  --radius: 4px;
+}
+
+/* Not an inversion — the same room at night, lit warm. */
+.dark {
+  --background: oklch(0.19 0.008 60);
+  --card: oklch(0.22 0.009 60);
+  --card-foreground: oklch(0.92 0.008 80);
+  --popover: oklch(0.22 0.009 60);
+  --popover-foreground: oklch(0.92 0.008 80);
+
+  --foreground: oklch(0.92 0.008 80);
+  --muted: oklch(0.24 0.01 60);
+  /* Night moves *up* in lightness: on a dark ground, deeper would disappear. */
+  --surface-hover: oklch(0.3 0.013 60);
+  --muted-foreground: oklch(0.68 0.012 70);
+  --secondary: oklch(0.24 0.01 60);
+  --secondary-foreground: oklch(0.92 0.008 80);
+  --accent: oklch(0.24 0.01 60);
+  --accent-foreground: oklch(0.92 0.008 80);
+
+  --primary: oklch(0.68 0.13 42);
+  --primary-foreground: oklch(0.19 0.008 60);
+  /* Night rust deepens *upward* in lightness, because the surface it sits on is dark. */
+  --primary-hover: oklch(0.74 0.125 42);
+
+  --destructive: oklch(0.65 0.18 22);
+
+  --border: oklch(0.3 0.01 60);
+  --input: oklch(0.3 0.01 60);
+  --ring: oklch(0.68 0.13 42);
+
+  --chart-1: oklch(0.68 0.13 42);
+  --chart-2: oklch(0.78 0.1 75);
+  --chart-3: oklch(0.66 0.06 150);
+  --chart-4: oklch(0.72 0.09 25);
+  --chart-5: oklch(0.62 0.07 250);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+
+  /* Headings default to the serif so no page has to remember to opt in. The
+     WONK axis is charming at 64px and distracting at 24px, so it is spent only
+     on the display size, which pages set explicitly. */
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    font-variation-settings: "opsz" 72, "WONK" 0;
+    letter-spacing: -0.015em;
   }
 }
 
-/* Global styles */
-body {
-  background: linear-gradient(
-      rgba(255, 255, 255, 0.5),
-      rgba(222, 220, 220, 0.25)
-    ),
-    url("/images/bg4.jpg");
+@layer base {
+  /* The focus ring is the only element in the system permitted to appear above
+     the page, and it is deliberately the most prominent state there is. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
 
-  background-size: cover;
-  background-position: center;
-  background-attachment: fixed;
-  background-repeat: no-repeat;
-
-  color: var(--foreground);
+  /* Selection stays inside the palette. The browser default is a saturated blue that has nothing
+     to do with this room, and reading with text selected should stay comfortable. */
+  ::selection {
+    background: var(--muted);
+    color: var(--foreground);
+  }
 }
 
-/* Form elements */
-input,
-textarea {
-  color: #1f2937;
-  background-color: #fff;
+/* DESIGN.md §33. Not a nicety: for some people motion is a vestibular trigger, and the system's
+   own motion is small enough that removing it costs nothing.
+   Transitions are reduced to ~0 rather than removed, so state changes still *commit* — a
+   `transition: none` can strand an element mid-state in some engines. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
-input::placeholder,
-textarea::placeholder {
-  color: #6b7280;
-  opacity: 1;
+/* Unlayered on purpose: this has to win over @tailwindcss/typography's own
+   layered `.prose` defaults. Article bodies are 18px Fraunces on a 68ch
+   measure — the single most important typographic decision in the product. */
+.prose {
+  --tw-prose-body: var(--foreground);
+  --tw-prose-headings: var(--foreground);
+  --tw-prose-lead: var(--muted-foreground);
+  --tw-prose-links: var(--primary);
+  --tw-prose-bold: var(--foreground);
+  --tw-prose-counters: var(--muted-foreground);
+  --tw-prose-bullets: var(--border);
+  --tw-prose-hr: var(--border);
+  --tw-prose-quotes: var(--foreground);
+  --tw-prose-quote-borders: var(--primary);
+  --tw-prose-captions: var(--muted-foreground);
+  --tw-prose-code: var(--foreground);
+  --tw-prose-pre-code: var(--foreground);
+  --tw-prose-pre-bg: var(--muted);
+  --tw-prose-th-borders: var(--border);
+  --tw-prose-td-borders: var(--border);
+
+  font-family: var(--font-serif);
+  font-variation-settings: "opsz" 14, "WONK" 0;
+  font-size: 1.125rem;
+  line-height: 1.7;
+  max-width: 68ch;
+}
+
+.prose :where(h1, h2, h3, h4) {
+  font-family: var(--font-display);
+  font-variation-settings: "opsz" 72, "WONK" 0;
+  letter-spacing: -0.015em;
+}
+
+/* Links inside prose are one of the three sanctioned uses of the accent. */
+.prose :where(a) {
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.prose :where(img) {
+  border-radius: var(--radius-sm);
 }

@@ -1,12 +1,12 @@
-import axios from "axios";
+import axios, { type AxiosError } from "axios";
 
-export const API_URL =
-    process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
-export const BASE_URL =
-    process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:5000";
+export const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+// Not exported: only getImageUrl below consumes it.
+const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:5000";
 
-// Helper to get full image URL
-export const getImageUrl = (path: string | undefined): string => {
+// Server returns relative paths (/uploads/...); absolute URLs (Cloudinary, from Phase 7) pass
+// through untouched.
+export const getImageUrl = (path: string | undefined | null): string => {
     if (!path) return "";
     if (path.startsWith("http")) return path;
     return `${BASE_URL}${path}`;
@@ -15,9 +15,11 @@ export const getImageUrl = (path: string | undefined): string => {
 const apiClient = axios.create({
     baseURL: API_URL,
     withCredentials: true,
+    timeout: 15_000,
 });
 
-// Attach JWT token from persisted auth storage on every request
+// Attach the JWT from persisted auth storage. The key and shape here must match authStore's
+// persist config exactly — changing either breaks every authenticated request silently.
 apiClient.interceptors.request.use((config) => {
     if (typeof window !== "undefined") {
         try {
@@ -29,16 +31,31 @@ apiClient.interceptors.request.use((config) => {
                 }
             }
         } catch {
-            // Silently ignore parse errors
+            // Corrupt storage shouldn't stop the request; it just goes out unauthenticated.
         }
     }
     return config;
 });
 
-// Unwrap axios errors so callers receive consistent rejection values
+// Events, not a direct store import: store -> service -> lib/api -> store is a cycle that the
+// bundler resolves to undefined at runtime. app/providers.tsx listens for these.
 apiClient.interceptors.response.use(
     (response) => response,
-    (error) => Promise.reject(error)
+    (error: AxiosError<{ message?: string }>) => {
+        if (typeof window !== "undefined") {
+            const status = error.response?.status;
+            const message = error.response?.data?.message?.toLowerCase() ?? "";
+
+            if (status === 401) {
+                window.dispatchEvent(new CustomEvent("auth:unauthorized"));
+            } else if (status === 403 && message.includes("blocked")) {
+                window.dispatchEvent(
+                    new CustomEvent("auth:blocked", { detail: error.response?.data?.message })
+                );
+            }
+        }
+        return Promise.reject(error);
+    }
 );
 
 export default apiClient;

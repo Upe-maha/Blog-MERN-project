@@ -1,170 +1,257 @@
 "use client";
 
-import { useAuthStore } from "@/stores";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { Blog } from "@/types";
-import { blogService } from "@/services/blogService";
-import { getImageUrl } from "@/lib/api";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import BlogCard from "@/components/blog/BlogCard";
+import { useRouter } from "next/navigation";
+import { FileText, Loader2, LogOut, PenLine, Settings } from "lucide-react";
+import { toast } from "sonner";
+import type { BlogListItem } from "@/types";
+import { useAuthStore } from "@/stores";
+import { blogService } from "@/services/blogService";
+import { authService } from "@/services/authService";
+import { getErrorMessage } from "@/lib/errorHandler";
+import { revalidateBlog } from "@/app/actions";
+import { Button } from "@/components/ui/button";
+import { UserAvatar } from "@/components/ui/user-avatar";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { BlogGridSkeleton } from "@/components/skeletons";
+import PostRow from "@/components/blog/PostRow";
+import PostActionsMenu from "@/components/user/PostActionsMenu";
+
+const PAGE_SIZE = 12;
+
+type Stats = { blogs: number; comments: number; likesReceived: number };
+
+// A stat is a number and its name, in that reading order. The old pills put the *value* in bold
+// colour and the *label* in grey beside it, which read backwards — "12 Blogs" as one sentence
+// rather than a labelled figure.
+function Stat({ value, label }: { value: number | null; label: string }) {
+    return (
+        <div>
+            <div className="font-serif text-2xl leading-none tabular-nums">
+                {value === null ? <span className="text-muted-foreground">—</span> : value}
+            </div>
+            <div className="text-muted-foreground mt-1.5 text-[0.8125rem] tracking-[0.06em]">
+                {label}
+            </div>
+        </div>
+    );
+}
 
 export default function ProfilePage() {
     const router = useRouter();
-    const { user, isAuthenticated, isHydrated, logout } = useAuthStore();
-    const [userBlogs, setUserBlogs] = useState<Blog[]>([]);
+    // The (main)/profile layout wraps this in RequireAuth, so by the time it renders the store is
+    // hydrated and the user is real — no local redirect effect needed.
+    const { user, logout } = useAuthStore();
+
+    const [posts, setPosts] = useState<BlogListItem[]>([]);
+    const [page, setPage] = useState(1);
+    const [hasMore, setHasMore] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+    const [isFetchingMore, setIsFetchingMore] = useState(false);
 
-    useEffect(() => {
-        if (!isHydrated) return; // wait for localStorage to rehydrate
-        if (!isAuthenticated) {
-            router.push("/login");
-            return;
-        }
-        fetchUserBlogs();
-    }, [isAuthenticated, isHydrated, router]);
+    // null until the request lands, so the tiles show a dash rather than a confident zero.
+    const [stats, setStats] = useState<Stats | null>(null);
 
-    const fetchUserBlogs = async () => {
+    const [pendingDelete, setPendingDelete] = useState<BlogListItem | null>(null);
+    const [deleting, setDeleting] = useState(false);
+
+    const load = useCallback(async () => {
         try {
-            const response = await blogService.getAll();
-            const blogs = response.blogs || [];
-            // Filter blogs by current user
-            const filtered = blogs.filter(
-                (blog: Blog) => blog.author?._id === user?._id
-            );
-            setUserBlogs(filtered);
-        } catch (error) {
-            console.error("Error fetching blogs:", error);
+            // author=me is resolved from the token server-side. This used to fetch the newest
+            // posts site-wide at limit 5 and filter them in the browser, so you only saw your own
+            // posts if they happened to be among the five most recent on the entire site.
+            const [list, counts] = await Promise.all([
+                blogService.getAll({ author: "me", page: 1, limit: PAGE_SIZE }),
+                authService.getMyStats(),
+            ]);
+            setPosts(list.blogs ?? []);
+            setPage(list.currentPage ?? 1);
+            setHasMore(!!list.hasMore);
+            setStats(counts);
+        } catch (err) {
+            toast.error(getErrorMessage(err, "Could not load your profile."));
         } finally {
             setIsLoading(false);
         }
-    };
+    }, []);
 
-    const handleDeleteBlog = async (blogId: string) => {
-        if (!confirm("Are you sure you want to delete this blog?")) return;
+    useEffect(() => {
+        void load();
+    }, [load]);
 
+    const loadMore = async () => {
+        if (isFetchingMore || !hasMore) return;
+        setIsFetchingMore(true);
         try {
-            await blogService.delete(blogId);
-            setUserBlogs((prev) => prev.filter((blog) => blog._id !== blogId));
-        } catch (error) {
-            console.error("Error deleting blog:", error);
+            const list = await blogService.getAll({
+                author: "me",
+                page: page + 1,
+                limit: PAGE_SIZE,
+            });
+            // Dedupe by id: publishing between two page requests shifts everything down one, which
+            // would otherwise render the boundary post twice.
+            const seen = new Set(posts.map((p) => p._id));
+            setPosts((prev) => [...prev, ...(list.blogs ?? []).filter((b) => !seen.has(b._id))]);
+            setPage(list.currentPage ?? page + 1);
+            setHasMore(!!list.hasMore);
+        } catch (err) {
+            toast.error(getErrorMessage(err, "Could not load more posts."));
+        } finally {
+            setIsFetchingMore(false);
         }
     };
 
-    const handleLogout = () => {
+    const confirmDelete = async () => {
+        if (!pendingDelete) return;
+        setDeleting(true);
+        try {
+            await blogService.delete(pendingDelete._id);
+            setPosts((prev) => prev.filter((b) => b._id !== pendingDelete._id));
+            setStats((s) => (s ? { ...s, blogs: Math.max(0, s.blogs - 1) } : s));
+            toast.success("Post deleted");
+            const removedId = pendingDelete._id;
+            setPendingDelete(null);
+            await revalidateBlog(removedId);
+            router.refresh();
+        } catch (err) {
+            toast.error(getErrorMessage(err, "Could not delete the post."));
+        } finally {
+            setDeleting(false);
+        }
+    };
+
+    const signOut = () => {
         logout();
+        toast.success("Signed out");
         router.push("/");
     };
 
-    if (!isHydrated || !isAuthenticated || !user) {
-        return (
-            <div className="min-h-[60vh] flex items-center justify-center">
-                <div className="text-center">
-                    <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                    <p className="text-gray-600">Loading...</p>
-                </div>
-            </div>
-        );
-    }
+    if (!user) return null;
+
+    const joined = new Date(user.createdAt);
 
     return (
-        <div className="max-w-6xl mx-auto px-4 py-10">
-            {/* Profile Header */}
-            <div className="bg-white/50 rounded-2xl shadow-lg p-8 mb-8">
-                <div className="flex flex-col md:flex-row items-center md:items-start gap-6">
-                    {/* Avatar */}
-                    <div className="w-24 h-24 bg-indigo-500 rounded-full flex items-center justify-center text-white text-4xl font-bold overflow-hidden">
-                        {getImageUrl(user.profilePicture) ? (
-                            <img
-                                src={getImageUrl(user.profilePicture)}
-                                alt={user.username}
-                                className="w-full h-full object-cover"
-                            />
-                        ) : (
-                            user.username?.charAt(0).toUpperCase()
-                        )}
-                    </div>
-
-                    {/* User Info */}
-                    <div className="flex-1 text-center md:text-left">
-                        <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                            {user.username}
-                        </h1>
-                        <p className="text-gray-500 mb-4">{user.email}</p>
-                        <div className="flex flex-wrap justify-center md:justify-start gap-4">
-                            <div className="bg-indigo-50 px-4 py-2 rounded-lg">
-                                <span className="text-indigo-600 font-bold">{userBlogs.length}</span>
-                                <span className="text-gray-600 ml-1">Blogs</span>
-                            </div>
-                            <div className="bg-green-50 px-4 py-2 rounded-lg">
-                                <span className="text-green-600 font-bold">
-                                    {new Date(user.createdAt).toLocaleDateString()}
-                                </span>
-                                <span className="text-gray-600 ml-1">Joined</span>
-                            </div>
+        <div className="max-w-feed py-4">
+            <header className="border-border border-b pb-8">
+                <div className="flex flex-wrap items-start justify-between gap-6">
+                    <div className="flex min-w-0 items-center gap-4">
+                        <UserAvatar
+                            username={user.username}
+                            profilePicture={user.profilePicture}
+                            className="size-16 shrink-0"
+                        />
+                        <div className="min-w-0">
+                            <h1 className="text-2xl leading-tight font-normal">{user.username}</h1>
+                            <p className="text-muted-foreground mt-1 truncate text-sm">
+                                {user.email}
+                            </p>
+                            <p className="text-muted-foreground mt-1.5 text-[0.8125rem] tracking-[0.06em]">
+                                Joined{" "}
+                                <time dateTime={user.createdAt}>
+                                    {joined.toLocaleDateString("en-GB", {
+                                        month: "long",
+                                        year: "numeric",
+                                    })}
+                                </time>
+                            </p>
                         </div>
                     </div>
 
-                    {/* Actions */}
-                    <div className="flex flex-wrap gap-3">
-                        <Link
-                            href="/blogs/create"
-                            className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-indigo-700 transition"
+                    <div className="flex flex-wrap items-center gap-1">
+                        <Button variant="ghost" size="sm" render={<Link href="/blogs/create" />}>
+                            <PenLine aria-hidden="true" />
+                            Write
+                        </Button>
+                        <Button variant="ghost" size="sm" render={<Link href="/profile/edit" />}>
+                            <Settings aria-hidden="true" />
+                            Settings
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-muted-foreground"
+                            onClick={signOut}
                         >
-                            + New Blog
-                        </Link>
-                        <Link
-                            href="/profile/edit"
-                            className="border border-indigo-600 text-indigo-600 px-6 py-2 rounded-lg font-semibold hover:bg-indigo-50 transition"
-                        >
-                            Edit Profile
-                        </Link>
-                        <button
-                            onClick={handleLogout}
-                            className="border border-red-500 text-red-500 px-6 py-2 rounded-lg font-semibold hover:bg-red-50 transition"
-                        >
-                            Logout
-                        </button>
+                            <LogOut aria-hidden="true" />
+                            Sign out
+                        </Button>
                     </div>
                 </div>
-            </div>
 
-            {/* User's Blogs */}
-            <div className="bg-white/50 rounded-2xl shadow-lg p-8">
-                <h2 className="text-2xl font-bold text-gray-900 mb-6">My Blogs</h2>
+                <div className="mt-8 flex gap-12">
+                    <Stat value={stats?.blogs ?? null} label="Posts" />
+                    <Stat value={stats?.comments ?? null} label="Comments" />
+                    <Stat value={stats?.likesReceived ?? null} label="Likes received" />
+                </div>
+            </header>
+
+            <section className="mt-8">
+                <h2 className="sr-only">Your posts</h2>
 
                 {isLoading ? (
-                    <div className="text-center py-10">
-                        <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
-                    </div>
-                ) : userBlogs.length === 0 ? (
-                    <div className="text-center py-10">
-                        <div className="text-6xl mb-4">📝</div>
-                        <h3 className="text-xl font-bold text-gray-800 mb-2">No blogs yet</h3>
-                        <p className="text-gray-500 mb-6">Start sharing your ideas with the world!</p>
-                        <Link
-                            href="/blogs/create"
-                            className="bg-indigo-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-indigo-700 transition inline-block"
-                        >
-                            Create Your First Blog
-                        </Link>
-                    </div>
+                    <BlogGridSkeleton count={3} />
+                ) : posts.length === 0 ? (
+                    <EmptyState
+                        icon={FileText}
+                        title="Nothing published yet"
+                        description="Your posts will collect here once you write one."
+                        action={<Button render={<Link href="/blogs/create" />}>Write your first</Button>}
+                    />
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {userBlogs.map((blog) => (
-                            <div key={blog._id} className="relative group">
-                                <BlogCard blog={blog} />
-                                <button
-                                    onClick={() => handleDeleteBlog(blog._id)}
-                                    className="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-lg text-xs font-semibold opacity-0 group-hover:opacity-100 transition"
-                                >
-                                    Delete
-                                </button>
+                    <div className="border-border border-t">
+                        {posts.map((blog) => (
+                            // The menu sits outside PostRow's stretched title link rather than on
+                            // top of it, so the trigger is a real tab stop instead of something
+                            // the row's own click target swallows.
+                            <div key={blog._id} className="flex items-start gap-2">
+                                <div className="min-w-0 flex-1">
+                                    <PostRow blog={blog} />
+                                </div>
+                                <div className="shrink-0 pt-6">
+                                    <PostActionsMenu
+                                        blogId={blog._id}
+                                        title={blog.title}
+                                        onDelete={() => setPendingDelete(blog)}
+                                    />
+                                </div>
                             </div>
                         ))}
                     </div>
                 )}
-            </div>
+
+                {hasMore ? (
+                    <div className="mt-6 flex justify-center">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={loadMore}
+                            disabled={isFetchingMore}
+                        >
+                            {isFetchingMore ? <Loader2 className="animate-spin" /> : null}
+                            {isFetchingMore ? "Loading…" : "Load more posts"}
+                        </Button>
+                    </div>
+                ) : null}
+            </section>
+
+            <ConfirmDialog
+                open={!!pendingDelete}
+                onOpenChange={(open) => {
+                    if (!open) setPendingDelete(null);
+                }}
+                title="Delete this post?"
+                description={
+                    pendingDelete
+                        ? `“${pendingDelete.title}” and all of its comments and likes are removed. This cannot be undone.`
+                        : undefined
+                }
+                confirmLabel="Delete post"
+                destructive
+                loading={deleting}
+                onConfirm={confirmDelete}
+            />
         </div>
     );
 }

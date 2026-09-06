@@ -1,28 +1,26 @@
 import Link from "next/link";
+import { FileQuestion } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 
+// Sits outside both route groups, so it renders without the navbar/footer chrome.
 export default function NotFound() {
     return (
-        <div className="min-h-[70vh] flex items-center justify-center px-4">
-            <div className="text-center">
-                <h1 className="text-9xl font-bold text-indigo-600">404</h1>
-                <h2 className="text-3xl font-bold text-gray-800 mt-4">Page Not Found</h2>
-                <p className="text-gray-500 mt-2 mb-8">
-                    The page you are looking for doesn&apos;t exist or has been moved.
-                </p>
-                <div className="flex justify-center gap-4">
-                    <Link
-                        href="/"
-                        className="bg-indigo-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-indigo-700 transition"
-                    >
-                        Go Home
-                    </Link>
-                    <Link
-                        href="/blogs"
-                        className="border border-indigo-600 text-indigo-600 px-6 py-3 rounded-lg font-semibold hover:bg-indigo-50 transition"
-                    >
-                        Browse Blogs
-                    </Link>
-                </div>
+        <div className="grid min-h-dvh place-items-center px-4">
+            <div className="w-full max-w-lg">
+                <EmptyState
+                    icon={FileQuestion}
+                    title="Page not found"
+                    description="The page you're looking for doesn't exist or has been moved."
+                    action={
+                        <div className="flex flex-col gap-3 sm:flex-row">
+                            <Button render={<Link href="/" />}>Go home</Button>
+                            <Button variant="ghost" render={<Link href="/blogs" />}>
+                                Browse essays
+                            </Button>
+                        </div>
+                    }
+                />
             </div>
         </div>
     );
