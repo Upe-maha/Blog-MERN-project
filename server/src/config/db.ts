@@ -1,13 +1,12 @@
 import mongoose from "mongoose";
+import { env } from "../env.js";
+import { logger } from "../utils/logger.js";
 
-const connectDB = async () => {
-    try {
-        const connect = await mongoose.connect(process.env.MONGODB_URI as string);
-        console.log(`MongoDB connected: ${connect.connection.host}`)
-    } catch (err) {
-        console.error(`Error connecting to MongoDB: ${err}`);
-        process.exit(1);
-    }
-}
+const connectDB = async (): Promise<void> => {
+    // Indexes are built deliberately in production via `npm run indexes`, not on every boot.
+    mongoose.set("autoIndex", env.NODE_ENV !== "production");
+    await mongoose.connect(env.MONGODB_URI);
+    logger.info("MongoDB connected");
+};
 
 export default connectDB;

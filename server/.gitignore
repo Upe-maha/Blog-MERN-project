@@ -24,3 +24,6 @@ out/
 .DS_Store
 Thumbs.db
 
+
+# Uploaded files (Phase 7 moves these to Cloudinary)
+uploads/
