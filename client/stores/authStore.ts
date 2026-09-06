@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { User } from "@/types";
+import { clearSessionHint, setSessionHint } from "@/lib/sessionHint";
 
 interface AuthState {
     user: User | null;
@@ -26,22 +27,32 @@ export const useAuthStore = create<AuthState>()(
             isLoading: false,
             isHydrated: false,
 
-            setUser: (user, token) =>
+            // The session-hint cookie is written here rather than at each call site: there are
+            // five places that log out, and one that forgets leaves middleware.ts redirecting a
+            // signed-out visitor as though they were still signed in. It is a non-sensitive,
+            // forgeable UX hint — see lib/sessionHint.ts.
+            setUser: (user, token) => {
+                setSessionHint(user.role);
                 set({
                     user,
                     token,
                     isAuthenticated: true,
-                }),
+                });
+            },
 
-            updateUser: (user) =>
-                set({ user }),
+            updateUser: (user) => {
+                setSessionHint(user.role);
+                set({ user });
+            },
 
-            logout: () =>
+            logout: () => {
+                clearSessionHint();
                 set({
                     user: null,
                     token: null,
                     isAuthenticated: false,
-                }),
+                });
+            },
 
             setLoading: (loading) =>
                 set({
@@ -65,6 +76,9 @@ export const useAuthStore = create<AuthState>()(
 
             // Handle hydration after refresh
             onRehydrateStorage: () => (state) => {
+                // localStorage has no expiry but the hint cookie does, so a returning visitor can
+                // have a valid session and no cookie. Re-assert it before anything reads it.
+                if (state?.isAuthenticated && state.user) setSessionHint(state.user.role);
                 state?.setHydrated(true);
             },
         }

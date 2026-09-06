@@ -1,243 +1,330 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useRef, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { authService } from "@/services/authService";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Camera, Eye, EyeOff, Loader2, X } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { useAuthStore } from "@/stores";
+import { authService } from "@/services/authService";
+import { getErrorMessage } from "@/lib/errorHandler";
+import { registerSchema, validateAvatar, type RegisterValues } from "@/lib/validation/auth";
 
 export default function RegisterPage() {
     const router = useRouter();
-    const { setUser } = useAuthStore();
+    const setUser = useAuthStore((s) => s.setUser);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const [adminExists, setAdminExists] = useState<boolean | null>(null);
-    const [registerAsAdmin, setRegisterAsAdmin] = useState(false);
+    const [formError, setFormError] = useState("");
+    const [showPassword, setShowPassword] = useState(false);
+    const [avatar, setAvatar] = useState<File | null>(null);
+    const [avatarError, setAvatarError] = useState("");
+    const [previewUrl, setPreviewUrl] = useState("");
+    const previewUrlRef = useRef("");
 
-    const [formData, setFormData] = useState({
-        username: "",
-        email: "",
-        password: "",
-        confirmPassword: "",
+    // The preview URL is created in the event handler rather than derived in an effect: an effect
+    // would have to setState on every file change, which cascades an extra render. createObjectURL
+    // pins the blob in memory until revoked, so the previous one is released on every swap.
+    const chooseAvatar = (file: File | null) => {
+        if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+        const url = file ? URL.createObjectURL(file) : "";
+        previewUrlRef.current = url;
+        setAvatar(file);
+        setPreviewUrl(url);
+    };
+
+    // Leaving the page mid-signup would otherwise leak the last preview.
+    useEffect(
+        () => () => {
+            if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+        },
+        []
+    );
+
+    const {
+        register,
+        handleSubmit,
+        formState: { errors, isSubmitting },
+    } = useForm<RegisterValues>({
+        resolver: zodResolver(registerSchema),
+        defaultValues: { username: "", email: "", password: "", confirmPassword: "" },
     });
-    const [profileImage, setProfileImage] = useState<File | null>(null);
-    const [imagePreview, setImagePreview] = useState<string>("");
-    const [error, setError] = useState("");
-    const [isLoading, setIsLoading] = useState(false);
 
-    // Check if an admin exists — determines whether to show the admin option
+    const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        // Checked here as well as on the server, so an oversized file fails instantly instead of
+        // after a 5 MB upload.
+        const problem = validateAvatar(file);
+        if (problem) {
+            setAvatarError(problem);
+            chooseAvatar(null);
+            e.target.value = "";
+            return;
+        }
+        setAvatarError("");
+        chooseAvatar(file);
+    };
+
+    // First-run setup. Undefined until the answer arrives, so the option never flashes in and
+    // then disappears — and a failed check simply means the option is not offered.
+    const [needsAdmin, setNeedsAdmin] = useState<boolean | undefined>(undefined);
+    const [claimAdmin, setClaimAdmin] = useState(false);
+
     useEffect(() => {
-        authService.checkAdminExists()
-            .then(({ adminExists }) => setAdminExists(adminExists))
-            .catch(() => setAdminExists(true)); // fail-safe: hide admin option on error
+        let cancelled = false;
+        authService
+            .getBootstrapStatus()
+            .then(({ adminExists }) => {
+                if (!cancelled) setNeedsAdmin(!adminExists);
+            })
+            .catch(() => {
+                if (!cancelled) setNeedsAdmin(false);
+            });
+        return () => {
+            cancelled = true;
+        };
     }, []);
 
-    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const { name, value } = e.target;
-        setFormData((prev) => ({ ...prev, [name]: value }));
-    };
-
-    const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            setProfileImage(file);
-            const reader = new FileReader();
-            reader.onloadend = () => setImagePreview(reader.result as string);
-            reader.readAsDataURL(file);
-        }
-    };
-
-    const removeImage = () => {
-        setProfileImage(null);
-        setImagePreview("");
+    const clearAvatar = () => {
+        chooseAvatar(null);
+        setAvatarError("");
         if (fileInputRef.current) fileInputRef.current.value = "";
     };
 
-    const handleFormSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setError("");
-
-        if (formData.password !== formData.confirmPassword) {
-            setError("Passwords do not match");
-            return;
-        }
-        if (formData.password.length < 6) {
-            setError("Password must be at least 6 characters");
-            return;
-        }
-
-        setIsLoading(true);
+    const onSubmit = handleSubmit(async (values) => {
+        setFormError("");
         try {
-            const submitData = new FormData();
-            submitData.append("username", formData.username);
-            submitData.append("email", formData.email);
-            submitData.append("password", formData.password);
-            if (registerAsAdmin) submitData.append("role", "admin");
-            if (profileImage) submitData.append("profilePicture", profileImage);
+            const payload = new FormData();
+            payload.append("username", values.username);
+            payload.append("email", values.email);
+            payload.append("password", values.password);
+            if (avatar) payload.append("profilePicture", avatar);
+            // Still no `role` field — the API strips it. `claimAdmin` only *asks*; the server
+            // grants it solely when no administrator exists yet, and a unique index makes the
+            // first-run claim atomic under concurrent signups.
+            if (needsAdmin && claimAdmin) payload.append("claimAdmin", "true");
 
-            const response = await authService.register(submitData);
-
-            if (response.user) {
-                const loginResponse = await authService.login({
-                    email: formData.email,
-                    password: formData.password,
-                });
-                if (loginResponse.user && loginResponse.token) {
-                    setUser(loginResponse.user, loginResponse.token);
-                    router.push(loginResponse.user.role === "admin" ? "/admin" : "/blogs");
-                } else {
-                    router.push("/login");
-                }
-            } else {
-                setError(response.message || "Registration failed");
+            const created = await authService.register(payload);
+            if (!created.user) {
+                setFormError(created.message || "Registration failed. Please try again.");
+                return;
             }
-        } catch (err: any) {
-            setError(err?.response?.data?.message || "Something went wrong. Please try again.");
-        } finally {
-            setIsLoading(false);
+
+            // Sign in with the credentials just accepted, so the new account lands logged in.
+            const session = await authService.login({
+                email: values.email,
+                password: values.password,
+            });
+            if (session.user && session.token) {
+                setUser(session.user, session.token);
+                router.replace("/blogs");
+            } else {
+                router.replace("/login");
+            }
+        } catch (err) {
+            setFormError(getErrorMessage(err, "Could not create your account. Please try again."));
         }
-    };
+    });
 
     return (
-        <div className="min-h-[80vh] flex items-center justify-center py-12 px-4">
-            <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8">
-                <div className="text-center mb-8">
-                    <h1 className="text-3xl font-bold text-gray-900">Create Account</h1>
-                    <p className="text-gray-500 mt-2">Join our community today</p>
-                </div>
+        <div>
+            <header className="mb-8">
+                <h1 className="text-[1.75rem] leading-tight">
+                    {needsAdmin ? "Set up Marginalia" : "Create your account"}
+                </h1>
+                <p className="font-serif text-muted-foreground mt-2 leading-relaxed">
+                    {needsAdmin
+                        ? "This publication has no administrator yet. The first account can claim it."
+                        : "Start publishing in under a minute."}
+                </p>
+            </header>
 
-                {error && (
-                    <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg mb-6">
-                        {error}
-                    </div>
-                )}
-
-                <form onSubmit={handleFormSubmit} className="space-y-5">
-                    {/* Profile Picture */}
-                    <div className="flex flex-col items-center">
-                        <div className="relative">
-                            {imagePreview ? (
-                                <div className="relative">
-                                    <img
-                                        src={imagePreview}
-                                        alt="Preview"
-                                        className="w-24 h-24 rounded-full object-cover border-4 border-indigo-200"
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={removeImage}
-                                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm hover:bg-red-600"
-                                    >
-                                        ✕
-                                    </button>
-                                </div>
-                            ) : (
-                                <div
-                                    onClick={() => fileInputRef.current?.click()}
-                                    className="w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center cursor-pointer hover:bg-gray-300 transition"
-                                >
-                                    <span className="text-3xl text-gray-400">📷</span>
-                                </div>
-                            )}
-                        </div>
-                        <input
-                            ref={fileInputRef}
-                            type="file"
-                            accept="image/*"
-                            onChange={handleImageChange}
-                            className="hidden"
-                        />
-                        <p className="text-sm text-gray-500 mt-2">Profile Picture (optional)</p>
-                    </div>
-
-                    <div>
-                        <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-2">
-                            Username
-                        </label>
-                        <input
-                            type="text" id="username" name="username"
-                            value={formData.username} onChange={handleInputChange} required
-                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition"
-                            placeholder="johndoe"
-                        />
-                    </div>
-
-                    <div>
-                        <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                            Email Address
-                        </label>
-                        <input
-                            type="email" id="email" name="email"
-                            value={formData.email} onChange={handleInputChange} required
-                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition"
-                            placeholder="you@example.com"
-                        />
-                    </div>
-
-                    <div>
-                        <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-                            Password
-                        </label>
-                        <input
-                            type="password" id="password" name="password"
-                            value={formData.password} onChange={handleInputChange} required
-                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition"
-                            placeholder="Create a password"
-                        />
-                    </div>
-
-                    <div>
-                        <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">
-                            Confirm Password
-                        </label>
-                        <input
-                            type="password" id="confirmPassword" name="confirmPassword"
-                            value={formData.confirmPassword} onChange={handleInputChange} required
-                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition"
-                            placeholder="Confirm your password"
-                        />
-                    </div>
-
-                    {/* Admin option — only shown when no admin exists yet */}
-                    {adminExists === false && (
-                        <div className="border border-amber-200 bg-amber-50 rounded-lg p-4">
-                            <label className="flex items-center gap-3 cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    checked={registerAsAdmin}
-                                    onChange={(e) => setRegisterAsAdmin(e.target.checked)}
-                                    className="w-4 h-4 text-indigo-600 rounded"
-                                />
-                                <div>
-                                    <span className="font-semibold text-amber-800">Register as Admin</span>
-                                    <p className="text-xs text-amber-600 mt-0.5">
-                                        First-time only — no admin account exists yet.
-                                    </p>
-                                </div>
-                            </label>
-                        </div>
+            <form onSubmit={onSubmit} noValidate>
+                <FieldGroup>
+                    {/* A rule, not a filled box. A bordered panel inside the auth card
+                        reads as a card inside a card — see The Hairline Rule. */}
+                    {formError && (
+                        <p
+                            role="alert"
+                            className="border-destructive text-destructive border-l-2 py-0.5 pl-3 text-sm"
+                        >
+                            {formError}
+                        </p>
                     )}
 
-                    <button
-                        type="submit"
-                        disabled={isLoading || adminExists === null}
-                        className="w-full bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        {isLoading
-                            ? "Creating Account..."
-                            : registerAsAdmin
-                            ? "Create Admin Account"
-                            : "Create Account"}
-                    </button>
-                </form>
+                    {/* A real <label for> wrapping a visually-hidden file input. The previous
+                        <div onClick> could not be reached by keyboard or announced at all. */}
+                    <Field className="items-center">
+                        <FieldLabel
+                            htmlFor="profilePicture"
+                            className="group border-border bg-muted/40 hover:bg-surface-hover relative size-24 cursor-pointer overflow-hidden rounded-full border-2 border-dashed transition-colors focus-within:ring-3 focus-within:ring-ring/50"
+                        >
+                            {previewUrl ? (
+                                /* eslint-disable-next-line @next/next/no-img-element -- a blob:
+                                   preview has no remote host for next/image to optimise. */
+                                <img
+                                    src={previewUrl}
+                                    alt=""
+                                    className="size-full object-cover"
+                                />
+                            ) : (
+                                <span className="text-muted-foreground grid size-full place-items-center">
+                                    <Camera className="size-6" aria-hidden="true" />
+                                </span>
+                            )}
+                            <span className="sr-only">Choose a profile picture</span>
+                        </FieldLabel>
 
-                <p className="text-center mt-6 text-gray-600">
-                    Already have an account?{" "}
-                    <Link href="/login" className="text-indigo-600 font-semibold hover:underline">
-                        Sign in here
-                    </Link>
-                </p>
-            </div>
+                        <input
+                            ref={fileInputRef}
+                            id="profilePicture"
+                            type="file"
+                            accept="image/jpeg,image/png,image/gif,image/webp"
+                            onChange={handleAvatarChange}
+                            className="sr-only"
+                        />
+
+                        {avatar ? (
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="xs"
+                                onClick={clearAvatar}
+                                className="w-auto"
+                            >
+                                <X />
+                                Remove photo
+                            </Button>
+                        ) : (
+                            <FieldDescription className="text-center">
+                                Profile picture — optional, up to 5 MB
+                            </FieldDescription>
+                        )}
+                        {avatarError && (
+                            <FieldError className="text-center">{avatarError}</FieldError>
+                        )}
+                    </Field>
+
+                    <Field data-invalid={!!errors.username}>
+                        <FieldLabel htmlFor="username">Username</FieldLabel>
+                        <Input
+                            id="username"
+                            autoComplete="username"
+                            placeholder="janedoe"
+                            aria-invalid={!!errors.username}
+                            className="h-10"
+                            {...register("username")}
+                        />
+                        <FieldError errors={[errors.username]} />
+                    </Field>
+
+                    <Field data-invalid={!!errors.email}>
+                        <FieldLabel htmlFor="email">Email address</FieldLabel>
+                        <Input
+                            id="email"
+                            type="email"
+                            autoComplete="email"
+                            placeholder="you@example.com"
+                            aria-invalid={!!errors.email}
+                            className="h-10"
+                            {...register("email")}
+                        />
+                        <FieldError errors={[errors.email]} />
+                    </Field>
+
+                    <Field data-invalid={!!errors.password}>
+                        <FieldLabel htmlFor="password">Password</FieldLabel>
+                        <div className="relative">
+                            <Input
+                                id="password"
+                                type={showPassword ? "text" : "password"}
+                                autoComplete="new-password"
+                                placeholder="At least 8 characters"
+                                aria-invalid={!!errors.password}
+                                className="h-10 pr-10"
+                                {...register("password")}
+                            />
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon-sm"
+                                onClick={() => setShowPassword((v) => !v)}
+                                aria-label={showPassword ? "Hide password" : "Show password"}
+                                aria-pressed={showPassword}
+                                className="absolute top-1/2 right-1.5 -translate-y-1/2"
+                            >
+                                {showPassword ? <EyeOff /> : <Eye />}
+                            </Button>
+                        </div>
+                        <FieldError errors={[errors.password]} />
+                    </Field>
+
+                    <Field data-invalid={!!errors.confirmPassword}>
+                        <FieldLabel htmlFor="confirmPassword">Confirm password</FieldLabel>
+                        <Input
+                            id="confirmPassword"
+                            type={showPassword ? "text" : "password"}
+                            autoComplete="new-password"
+                            placeholder="Re-enter your password"
+                            aria-invalid={!!errors.confirmPassword}
+                            className="h-10"
+                            {...register("confirmPassword")}
+                        />
+                        <FieldError errors={[errors.confirmPassword]} />
+                    </Field>
+
+                    {/* Only while the application genuinely has no administrator. Once one exists
+                        this disappears for good — the server stops granting the claim at the same
+                        moment, so the UI and the rule cannot drift apart. A rule and a checkbox
+                        rather than a tinted panel: DESIGN.md §2.3. */}
+                    {needsAdmin ? (
+                        <Field
+                            orientation="horizontal"
+                            className="border-border items-start gap-3 border-t pt-5"
+                        >
+                            <input
+                                id="claimAdmin"
+                                type="checkbox"
+                                checked={claimAdmin}
+                                onChange={(e) => setClaimAdmin(e.target.checked)}
+                                className="accent-primary mt-0.5 size-4 shrink-0"
+                            />
+                            <div className="min-w-0">
+                                <FieldLabel htmlFor="claimAdmin" className="font-medium">
+                                    Make this the administrator account
+                                </FieldLabel>
+                                <FieldDescription>
+                                    Available only because no administrator exists yet. Whoever
+                                    claims it can manage every account and post, so do this before
+                                    sharing the address.
+                                </FieldDescription>
+                            </div>
+                        </Field>
+                    ) : null}
+
+                    <Button type="submit" size="lg" disabled={isSubmitting} className="w-full">
+                        {isSubmitting && <Loader2 className="animate-spin" />}
+                        {isSubmitting ? "Creating account…" : "Create account"}
+                    </Button>
+                </FieldGroup>
+            </form>
+
+            <p className="text-muted-foreground mt-6 text-center text-sm">
+                Already have an account?{" "}
+                <Link
+                    href="/login"
+                    className="text-foreground rounded-sm font-medium underline underline-offset-4"
+                >
+                    Sign in
+                </Link>
+            </p>
         </div>
     );
 }
